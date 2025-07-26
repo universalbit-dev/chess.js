@@ -16,6 +16,17 @@
    ```
 ---
 
+> **🔑 Need an API Key?**  
+> To use microchess with [JSONBin.io](https://jsonbin.io/), you’ll need a free API access key.
+>
+> Go to [https://jsonbin.io/api-reference/access-keys/create](https://jsonbin.io/api-reference/access-keys/create).
+> Sign up or log in.
+> Create an access key and copy it.
+> Paste it into the `JSONBIN_ACCESS_KEY` field in your `.env` file.
+
+**💡 Tip:** Keep your API key private—never share it in public repositories!
+
+---
 # ♟️ microchess
 
 **microchess** is a minimal, automated chess module with standardized logging and scheduled uploads of unique chess games.  
