@@ -65,14 +65,13 @@ npm install && npm i pm2 -g
 
 ### 3. ⚙️ Configure Your Environment (.env)
 
-
 Edit `.env` file and fill in:
 ```env
 # Time interval (in milliseconds) between random game generations/uploads
-MICROCHESS_INTERVAL=3600000
-
+MICROCHESS_GENERATOR_INTERVAL=450000
+MICROCHESS_UPLOAD_INTERVAL=3600000
 # Your jsonbin.io API Access Key
-JSONBIN_ACCESS_KEY= <== JSONBIN API KEY HERE
+JSONBIN_ACCESS_KEY= <== JSONBIN API Access-Key
 
 RANDOMCHESS_PATH=./randomchess.json
 METADATA_PATH=./metadata.json
@@ -108,7 +107,7 @@ Uploader started. Uploading every 3600s...
 ## 🔧 Advanced Usage
 
 - **Change Upload Interval:**  
-  Set `MICROCHESS_INTERVAL` in your `.env` to control how often uploads happen (in milliseconds).
+  Set `MICROCHESS_GENERATOR_INTERVAL and MICROCHESS_UPLOAD_INTERVAL` in your `.env` to control how often uploads happen (in milliseconds).
   
 | Interval (ms) | Interval (Time)  | Effect                                   |
 |:-------------:|:----------------:|:-----------------------------------------|
