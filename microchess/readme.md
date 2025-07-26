@@ -35,7 +35,7 @@ Built for reliability, transparency, and ease of use.
 
 ## 🚀 Quick Start
 
-### 1. 📥 Clone the Project
+### 1. 📥 Enter the microchess Directory
 
 ```bash
 cd chess.js/microchess
