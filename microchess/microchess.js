@@ -5,19 +5,24 @@ const winston = require('winston');
 const { Chess } = require('../dist/cjs/chess.js');
 
 const OUTPUT_FILE = path.join(__dirname, 'randomchess.json');
-const MAX_SIZE_BYTES = 1 * 1024 * 1024; // 1MB
-/*
-| MICROCHESS_INTERVAL (ms) | Interval         | Example use           |
-|--------------------------|------------------|-----------------------|
-|        60000             | 1 minute         | Fast testing          |
-|      3600000             | 1 hour (default) | Normal production     |
-|    86400000              | 24 hours         | Daily upload          |
 
-Set in .env to control upload/game frequency, e.g.:
-MICROCHESS_INTERVAL=3600000  // every hour
+// Maximum allowed file size for output (default: 1MB).
+// To customize, change the value below (in bytes), e.g. 2 * 1024 * 1024 for 2MB.
+const MAX_SIZE_BYTES = 1 * 1024 * 1024;
+
+
+/*
+| MICROCHESS_GENERATOR_INTERVAL (ms) | Interval         | Example use           |
+|------------------------------------|------------------|-----------------------|
+|        60000                       | 1 minute         | Fast testing          |
+|      3600000                       | 1 hour (default) | Normal production     |
+|    86400000                        | 24 hours         | Daily generation      |
+
+Set in .env to control chess game generation frequency, e.g.:
+MICROCHESS_GENERATOR_INTERVAL=3600000  // every hour
 */
 
-const INTERVAL = parseInt(process.env.MICROCHESS_INTERVAL, 10) || 3600000; 
+const GENERATOR_INTERVAL = parseInt(process.env.MICROCHESS_GENERATOR_INTERVAL, 10) || 3600000;
 
 // Winston logger setup
 const logger = winston.createLogger({
@@ -95,6 +100,4 @@ function runOnce() {
 runOnce();
 
 // Then schedule continuous runs
-setInterval(runOnce, INTERVAL);
-
-logger.info(`microchess.js started. Generating a random game every ${INTERVAL / 1000} seconds.`);
+setInterval(runOnce, GENERATOR_INTERVAL);
