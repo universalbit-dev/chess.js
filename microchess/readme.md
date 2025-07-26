@@ -54,14 +54,14 @@ npm install && npm i pm2 -g
 
 ### 3. ⚙️ Configure Your Environment (.env)
 
-```
-Edit `.env` and fill in:
 
+Edit `.env` file and fill in:
+```env
 # Time interval (in milliseconds) between random game generations/uploads
 MICROCHESS_INTERVAL=3600000
 
 # Your jsonbin.io API Access Key
-JSONBIN_ACCESS_KEY=  <== JSONBIN API KEY HERE
+JSONBIN_ACCESS_KEY= <== JSONBIN API KEY HERE
 
 RANDOMCHESS_PATH=./randomchess.json
 METADATA_PATH=./metadata.json
