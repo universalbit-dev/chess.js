@@ -14,17 +14,17 @@ const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch
 // Load config from .env or use defaults
 
 /*
-| MICROCHESS_INTERVAL (ms) | Interval         | Example use           |
-|--------------------------|------------------|-----------------------|
-|        60000             | 1 minute         | Fast testing          |
-|      3600000             | 1 hour (default) | Normal production     |
-|    86400000              | 24 hours         | Daily upload          |
+| MICROCHESS_UPLOAD_INTERVAL (ms) | Interval         | Example use           |
+|---------------------------------|------------------|-----------------------|
+|        60000                    | 1 minute         | Fast testing          |
+|      3600000                    | 1 hour (default) | Normal production     |
+|    86400000                     | 24 hours         | Daily upload          |
 
 Set in .env to control upload/game frequency, e.g.:
-MICROCHESS_INTERVAL=3600000  // every hour
+MICROCHESS_UPLOAD_INTERVAL=3600000  // every hour
 */
 
-const INTERVAL = parseInt(process.env.MICROCHESS_INTERVAL, 10) || 3600000; 
+const INTERVAL = parseInt(process.env.MICROCHESS_UPLOAD_INTERVAL, 10) || 3600000; 
 const ACCESS_KEY = process.env.JSONBIN_ACCESS_KEY;
 const RANDOMCHESS_PATH = process.env.RANDOMCHESS_PATH
   ? path.resolve(process.env.RANDOMCHESS_PATH)
