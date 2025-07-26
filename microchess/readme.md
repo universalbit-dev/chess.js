@@ -99,12 +99,12 @@ Uploader started. Uploading every 3600s...
 - **Change Upload Interval:**  
   Set `MICROCHESS_INTERVAL` in your `.env` to control how often uploads happen (in milliseconds).
   
-| Interval (ms) | Interval (Time)  | Example Value | Effect                                   |
-|:-------------:|:----------------:|:-------------:|:-----------------------------------------|
-| 3600000       | 1 hour           | 3600000       | Uploads once every hour (default)        |
-| 60000         | 1 minute         | 60000         | Uploads once every minute                |
-| 86400000      | 24 hours (1 day) | 86400000      | Uploads once every day                   |
-| 10000         | 10 seconds       | 10000         | Uploads every 10 seconds (for testing)   |
+| Interval (ms) | Interval (Time)  | Effect                                   |
+|:-------------:|:----------------:|:-----------------------------------------|
+| 3600000       | 1 hour           | Uploads once every hour (default)        |
+| 60000         | 1 minute         | Uploads once every minute                |
+| 86400000      | 24 hours (1 day) | Uploads once every day                   |
+| 10000         | 10 seconds       | Uploads every 10 seconds (for testing)   |
 
 - **Custom Data Locations:**  
   Set `RANDOMCHESS_PATH` and `METADATA_PATH` in your `.env`.
