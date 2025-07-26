@@ -1,1 +1,130 @@
+## ⚡️ Preparing chess.js for microchess
 
+> **🛠️ Before you run microchess, make sure the main chess.js library is installed!**
+
+### 📦 Installation Steps
+
+**Clone the repository:**
+   ```bash
+   git clone https://github.com/universalbit-dev/chess.js.git
+   cd chess.js
+   ```
+
+**Install dependencies (this also prepares the `dist/` folder automatically):**
+   ```bash
+   npm install
+   ```
+---
+
+# ♟️ microchess
+
+**microchess** is a minimal, automated chess module with standardized logging and scheduled uploads of unique chess games.  
+Built for reliability, transparency, and ease of use.
+
+---
+
+## ✨ Why Use microchess?
+
+- 🤖 **Automated:** Uploads unique chess games every hour
+- 🛡️ **No Duplicates:** Deduplication logic, unique games are uploaded.
+- 🏗️ **Production-Ready:** Clean logging, robust scheduling, and modern Node.js support.
+- 🔌 **Pluggable:** Easily integrates with chess pipelines or analytics projects.
+- 💡 **Open Source:** Fork, modify, or contribute as you like!
+
+---
+
+## 🚀 Quick Start
+
+### 1. 📥 Clone the Project
+
+```bash
+cd chess.js/microchess
+```
+
+---
+
+### 2. 📦 Install Dependencies
+
+```bash
+npm install && npm i pm2 -g
+```
+> **Tested Node.js version:** v20  
+
+---
+
+### 3. ⚙️ Configure Your Environment (.env)
+
+```
+Edit `.env` and fill in:
+
+# Time interval (in milliseconds) between random game generations/uploads
+MICROCHESS_INTERVAL=3600000
+
+# Your jsonbin.io API Access Key
+JSONBIN_ACCESS_KEY=  <== JSONBIN API KEY HERE
+
+RANDOMCHESS_PATH=./randomchess.json
+METADATA_PATH=./metadata.json
+```
+
+
+###  🏁 Run microchess
+
+```bash
+pm2 start microchess.config.js
+```
+This launches both the chess engine and the scheduled uploader.
+
+---
+
+## 🧠 How It Works
+
+- **microchess.js** — Main logic for chess move generation and logging.
+- **jsonbin_randomchess.js** — Every hour, deduplicates your chess game log and uploads new, unique games to your endpoint (e.g., jsonbin.io).
+- **Metadata** — Each upload’s result and stats are saved to `metadata.json` for transparency and troubleshooting.
+
+---
+
+## 📝 Example Output
+
+```
+Uploader started. Uploading every 3600s...
+[2025-07-26T13:42:53.103Z] Upload successful. Metadata saved to metadata.json.
+```
+
+---
+
+## 🔧 Advanced Usage
+
+- **Change Upload Interval:**  
+  Set `MICROCHESS_INTERVAL` in your `.env` to control how often uploads happen (in milliseconds).
+  
+| Interval (ms) | Interval (Time)  | Example Value | Effect                                   |
+|:-------------:|:----------------:|:-------------:|:-----------------------------------------|
+| 3600000       | 1 hour           | 3600000       | Uploads once every hour (default)        |
+| 60000         | 1 minute         | 60000         | Uploads once every minute                |
+| 86400000      | 24 hours (1 day) | 86400000      | Uploads once every day                   |
+| 10000         | 10 seconds       | 10000         | Uploads every 10 seconds (for testing)   |
+
+- **Custom Data Locations:**  
+  Set `RANDOMCHESS_PATH` and `METADATA_PATH` in your `.env`.
+- **Forking/Contributing:**  
+  Fork the repository, make your changes, and submit a pull request!
+
+---
+
+## ❓ FAQ
+
+**Q: How do I know if my games were uploaded?**  
+A: Check the console output and the `metadata.json` file for upload statuses and responses.
+
+**Q: How are duplicates prevented?**  
+A: microchess automatically deduplicates games before uploading. No extra action is needed.
+
+---
+
+## 👤 Author
+
+[universalbit-dev](https://github.com/universalbit-dev)
+
+---
