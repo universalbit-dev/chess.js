@@ -77,7 +77,6 @@ RANDOMCHESS_PATH=./randomchess.json
 METADATA_PATH=./metadata.json
 ```
 
-
 ###  🏁 Run microchess
 
 ```bash
