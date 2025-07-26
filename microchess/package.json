@@ -1,0 +1,25 @@
+{
+  "name": "microchess",
+  "version": "1.0.0",
+  "description": "microchess module with standardized logging.",
+  "main": "microchess.js",
+  "scripts": {
+    "start": "concurrently \"node microchess.js\" \"node jsonbin_randomchess.js\""
+  },
+  "keywords": [
+    "chess",
+    "minimal",
+    "logger",
+    "winston"
+  ],
+  "author": "universalbit-dev",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "node-fetch": "^3.3.2",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  }
+}
