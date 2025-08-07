@@ -91,6 +91,10 @@ export type Square =
     'a2' | 'b2' | 'c2' | 'd2' | 'e2' | 'f2' | 'g2' | 'h2' |
     'a1' | 'b1' | 'c1' | 'd1' | 'e1' | 'f1' | 'g1' | 'h1'
 
+export const SUFFIX_LIST = ['!', '?', '!!', '!?', '?!', '??'] as const
+
+export type Suffix = (typeof SUFFIX_LIST)[number]
+
 export const DEFAULT_POSITION =
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
@@ -141,7 +145,12 @@ export class Move {
   before: string
   after: string
 
-  constructor(chess: Chess, internal: InternalMove) {
+  constructor(
+    internal: InternalMove,
+    san: string,
+    before: string,
+    after: string,
+  ) {
     const { color, piece, from, to, flags, captured, promotion } = internal
 
     const fromAlgebraic = algebraic(from)
@@ -152,20 +161,10 @@ export class Move {
     this.from = fromAlgebraic
     this.to = toAlgebraic
 
-    /*
-     * HACK: The chess['_method']() calls below invoke private methods in the
-     * Chess class to generate SAN and FEN. It's a bit of a hack, but makes the
-     * code cleaner elsewhere.
-     */
-
-    this.san = chess['_moveToSan'](internal, chess['_moves']({ legal: true }))
+    this.san = san
     this.lan = fromAlgebraic + toAlgebraic
-    this.before = chess.fen()
-
-    // Generate the FEN for the 'after' key
-    chess['_makeMove'](internal)
-    this.after = chess.fen()
-    chess['_undoMove']()
+    this.before = before
+    this.after = after
 
     // Build the text representation of the move flags
     this.flags = ''
@@ -207,6 +206,10 @@ export class Move {
 
   isBigPawn() {
     return this.flags.indexOf(FLAGS['BIG_PAWN']) > -1
+  }
+
+  isNullMove() {
+    return this.flags.indexOf(FLAGS['NULL_MOVE']) > -1
   }
 }
 
@@ -715,6 +718,7 @@ export class Chess {
   private _moveNumber = 0
   private _history: History[] = []
   private _comments: Record<string, string> = {}
+  private _suffixes: Record<string, Suffix> = {}
   private _castling: Record<Color, number> = { w: 0, b: 0 }
 
   private _hash = 0n
@@ -723,6 +727,8 @@ export class Chess {
   private _positionCount = new Map<bigint, number>()
 
   constructor(fen = DEFAULT_POSITION, { skipValidation = false } = {}) {
+    this._comments = {}
+    this._suffixes = {}
     this.load(fen, { skipValidation })
   }
 
@@ -1000,6 +1006,8 @@ export class Chess {
 
   reset() {
     this.load(DEFAULT_POSITION)
+    this._comments = {}
+    this._suffixes = {}
   }
 
   get(square: Square): Piece | undefined {
@@ -1393,6 +1401,17 @@ export class Chess {
     )
   }
 
+  private _createMove(internal: InternalMove) {
+    const san = this._moveToSan(internal, this._moves({ legal: true }))
+    const before = this.fen()
+
+    this._makeMove(internal)
+    const after = this.fen()
+    this._undoMove()
+
+    return new Move(internal, san, before, after)
+  }
+
   moves(): string[]
   moves({ square }: { square: Square }): string[]
   moves({ piece }: { piece: PieceSymbol }): string[]
@@ -1457,7 +1476,7 @@ export class Chess {
     const moves = this._moves({ square, piece })
 
     if (verbose) {
-      return moves.map((move) => new Move(this, move))
+      return moves.map((move) => this._createMove(move))
     } else {
       return moves.map((move) => this._moveToSan(move, moves))
     }
@@ -1717,7 +1736,7 @@ export class Chess {
      * need to make a copy of move because we can't generate SAN after the move
      * is made
      */
-    const prettyMove = new Move(this, moveObj)
+    const prettyMove = this._createMove(moveObj)
 
     this._makeMove(moveObj)
     this._incPositionCount()
@@ -1885,7 +1904,7 @@ export class Chess {
     const hash = this._hash
     const move = this._undoMove()
     if (move) {
-      const prettyMove = new Move(this, move)
+      const prettyMove = this._createMove(move)
       this._decPositionCount(hash)
       return prettyMove
     }
@@ -2215,13 +2234,18 @@ export class Chess {
 
     while (node) {
       if (node.move) {
-        const move = this._moveFromSan(node.move, strict)
+        const suffixAnnotation = node.suffixAnnotation
 
-        if (move == null) {
+        const move = this._moveFromSan(node.move, strict)
+        if (!move) {
           throw new Error(`Invalid move in PGN: ${node.move}`)
         } else {
           this._makeMove(move)
           this._incPositionCount()
+
+          if (suffixAnnotation) {
+            this._suffixes[this.fen()] = suffixAnnotation as Suffix
+          }
         }
       }
 
@@ -2567,7 +2591,7 @@ export class Chess {
       }
 
       if (verbose) {
-        moveHistory.push(new Move(this, move))
+        moveHistory.push(this._createMove(move))
       } else {
         moveHistory.push(this._moveToSan(move, this._moves()))
       }
@@ -2650,11 +2674,77 @@ export class Chess {
     return comment
   }
 
-  getComments(): { fen: string; comment: string }[] {
+  getComments(): {
+    fen: string
+    comment?: string
+    suffixAnnotation?: string
+  }[] {
     this._pruneComments()
-    return Object.keys(this._comments).map((fen: string) => {
-      return { fen: fen, comment: this._comments[fen] }
-    })
+
+    const allFenKeys = new Set<string>()
+    Object.keys(this._comments).forEach((fen) => allFenKeys.add(fen))
+    Object.keys(this._suffixes).forEach((fen) => allFenKeys.add(fen))
+
+    const result: {
+      fen: string
+      comment?: string
+      suffixAnnotation?: string
+    }[] = []
+
+    for (const fen of allFenKeys) {
+      const commentContent = this._comments[fen]
+      const suffixAnnotation = this._suffixes[fen]
+
+      const entry: {
+        fen: string
+        comment?: string
+        suffixAnnotation?: string
+      } = {
+        fen: fen,
+      }
+
+      if (commentContent !== undefined) {
+        entry.comment = commentContent
+      }
+
+      if (suffixAnnotation !== undefined) {
+        entry.suffixAnnotation = suffixAnnotation
+      }
+
+      result.push(entry)
+    }
+
+    return result
+  }
+
+  /**
+   * Get the suffix annotation for the given position (or current one).
+   */
+  public getSuffixAnnotation(fen?: string): Suffix | undefined {
+    const key = fen ?? this.fen()
+    return this._suffixes[key]
+  }
+
+  /**
+   * Set or overwrite the suffix annotation for the given position (or current).
+   * Throws if the suffix isn't one of the allowed SUFFIX_LIST values.
+   */
+  public setSuffixAnnotation(suffix: Suffix, fen?: string): void {
+    if (!SUFFIX_LIST.includes(suffix)) {
+      throw new Error(`Invalid suffix: ${suffix}`)
+    }
+    this._suffixes[fen || this.fen()] = suffix
+  }
+
+  /**
+   * Remove the suffix annotation for the given position (or current).
+   */
+
+  public removeSuffixAnnotation(fen?: string): Suffix | undefined {
+    const key = fen || this.fen()
+    const old = this._suffixes[key]
+    delete this._suffixes[key]
+    return old
   }
 
   /**

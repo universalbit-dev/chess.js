@@ -54,10 +54,12 @@ export class Chess {
     // (undocumented)
     getComments(): {
         fen: string;
-        comment: string;
+        comment?: string;
+        suffixAnnotation?: string;
     }[];
     // (undocumented)
     getHeaders(): Record<string, string>;
+    getSuffixAnnotation(fen?: string): Suffix | undefined;
     // (undocumented)
     hash(): string;
     // @deprecated (undocumented)
@@ -212,6 +214,7 @@ export class Chess {
     }[];
     // (undocumented)
     removeHeader(key: string): boolean;
+    removeSuffixAnnotation(fen?: string): Suffix | undefined;
     // (undocumented)
     reset(): void;
     // (undocumented)
@@ -220,6 +223,7 @@ export class Chess {
     setComment(comment: string): void;
     // (undocumented)
     setHeader(key: string, value: string): Record<string, string>;
+    setSuffixAnnotation(suffix: Suffix, fen?: string): void;
     // (undocumented)
     setTurn(color: Color): boolean;
     // (undocumented)
@@ -245,7 +249,7 @@ export const KNIGHT = "n";
 // @public (undocumented)
 export class Move {
     // Warning: (ae-forgotten-export) The symbol "InternalMove" needs to be exported by the entry point chess.d.ts
-    constructor(chess: Chess, internal: InternalMove);
+    constructor(internal: InternalMove, san: string, before: string, after: string);
     // (undocumented)
     after: string;
     // (undocumented)
@@ -266,6 +270,8 @@ export class Move {
     isEnPassant(): boolean;
     // (undocumented)
     isKingsideCastle(): boolean;
+    // (undocumented)
+    isNullMove(): boolean;
     // (undocumented)
     isPromotion(): boolean;
     // (undocumented)
@@ -308,6 +314,12 @@ export type Square = 'a8' | 'b8' | 'c8' | 'd8' | 'e8' | 'f8' | 'g8' | 'h8' | 'a7
 
 // @public (undocumented)
 export const SQUARES: Square[];
+
+// @public (undocumented)
+export type Suffix = (typeof SUFFIX_LIST)[number];
+
+// @public (undocumented)
+export const SUFFIX_LIST: readonly ["!", "?", "!!", "!?", "?!", "??"];
 
 // @public (undocumented)
 export function validateFen(fen: string): {
