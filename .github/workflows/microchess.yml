@@ -1,0 +1,35 @@
+name: Microchess
+
+on:
+  push:
+    branches: ['master']
+  pull_request:
+    branches: ['master']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [22]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - name: Install dependencies
+        run: |
+          cd microchess
+          npm ci
+      - name: Install PM2 globally
+        run: npm install -g pm2
+      - name: Start microchess apps with PM2
+        run: |
+          cd microchess
+          pm2 start microchess.config.js
+      - name: List PM2 processes
+        run: pm2 ls
