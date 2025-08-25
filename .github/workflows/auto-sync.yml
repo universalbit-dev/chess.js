@@ -3,7 +3,10 @@ name: Auto Sync with Upstream
 on:
   schedule:
     - cron: '0 0 * * *' # daily
-  workflow_dispatch:     # allow manual trigger
+  workflow_dispatch:
+
+env:
+  SYNC_BRANCH: master   # Change to main if your repo uses main
 
 jobs:
   sync:
@@ -20,16 +23,26 @@ jobs:
 
       - name: Add upstream remote and fetch
         run: |
-          git remote add upstream https://github.com/upstream_owner/upstream_repo.git
+          git remote | grep -q upstream || git remote add upstream https://github.com/jhlywa/chess.js.git
           git fetch upstream
+
+      - name: Show pre-merge status
+        run: git status
 
       - name: Merge upstream changes
         run: |
-          git checkout master
-          git merge upstream/master
+          git checkout ${{ env.SYNC_BRANCH }}
+          git merge upstream/${{ env.SYNC_BRANCH }} --allow-unrelated-histories || true
 
-      - name: Push changes
+      - name: Show post-merge status
+        run: git status
+
+      - name: Push changes if any
         env:
           GH_TOKEN: ${{ secrets.AUTO_SYNC }}
         run: |
-          git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }} master
+          if [ -n "$(git status --porcelain)" ]; then
+            git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }} ${{ env.SYNC_BRANCH }}
+          else
+            echo "No changes to push."
+          fi
