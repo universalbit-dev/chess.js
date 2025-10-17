@@ -1,6 +1,6 @@
-require('dotenv').config();
-const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+const fs = require('fs');
 const winston = require('winston');
 const { Chess } = require('../dist/cjs/chess.js');
 
@@ -9,7 +9,6 @@ const OUTPUT_FILE = path.join(__dirname, 'randomchess.json');
 // Maximum allowed file size for output (default: 1MB).
 // To customize, change the value below (in bytes), e.g. 2 * 1024 * 1024 for 2MB.
 const MAX_SIZE_BYTES = 1 * 1024 * 1024;
-
 
 /*
 | MICROCHESS_GENERATOR_INTERVAL (ms) | Interval         | Example use           |
@@ -65,6 +64,7 @@ function generateRandomChessGame() {
   const chess = new Chess();
   let moves = [];
   let moveNumber = 1;
+  const startTime = new Date();
   while (!chess.isGameOver() && moveNumber <= 100) {
     const legalMoves = chess.moves();
     if (legalMoves.length === 0) break;
@@ -73,18 +73,54 @@ function generateRandomChessGame() {
     moves.push(move);
     moveNumber++;
   }
-  // Create a PGN-like string
+  const endTime = new Date();
+  // PGN moves
   let pgnMoves = '';
   for (let i = 0; i < moves.length; i++) {
     if (i % 2 === 0) pgnMoves += `${Math.floor(i / 2) + 1}. `;
     pgnMoves += moves[i] + ' ';
   }
   pgnMoves = pgnMoves.trim();
+
+  // Determine result and reason
+  let result = '*', reason = '';
+  if (chess.isCheckmate()) {
+    result = chess.turn() === 'w' ? '0-1' : '1-0';
+    reason = 'Checkmate';
+  } else if (chess.isStalemate()) {
+    result = '1/2-1/2';
+    reason = 'Draw by stalemate';
+  } else if (chess.isThreefoldRepetition()) {
+    result = '1/2-1/2';
+    reason = 'Draw by threefold repetition';
+  } else if (chess.isInsufficientMaterial()) {
+    result = '1/2-1/2';
+    reason = 'Draw by insufficient material';
+  } else if (chess.isDraw()) {
+    result = '1/2-1/2';
+    reason = 'Draw';
+  }
+
+  // Build PGN with headers
+  const pgnHeaders = [
+    `[Event "Random Game"]`,
+    `[Site "microchess"]`,
+    `[Date "${startTime.toISOString().slice(0, 10).replace(/-/g, ".")}"]`,
+    `[Result "${result}"]`,
+    `[PlyCount "${moves.length}"]`
+  ].join('\n');
+  const pgn = `${pgnHeaders}\n\n${pgnMoves} ${result}`;
+
   return {
     process: 'microchess',
     message: `Random Game Of Chess: ${pgnMoves}`,
     status: 'generated',
-    timestamp: new Date().toISOString()
+    timestamp: endTime.toISOString(),
+    move_count: moves.length,
+    result,
+    reason,
+    final_fen: chess.fen(),
+    pgn
   };
 }
 
