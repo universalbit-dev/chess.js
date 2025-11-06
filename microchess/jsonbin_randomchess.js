@@ -4,6 +4,37 @@
  * Scheduled uploader for filtered chess log JSON to jsonbin.io
  *
  * Author: universalbit-dev
+ *
+ * .env configuration
+ * ------------------
+ * This script reads configuration from a .env file (loaded via dotenv).
+ * The following environment variables are supported:
+ *
+ * - JSONBIN_ACCESS_KEY (required)
+ *     Your jsonbin.io access key. No default — the script will exit if not set.
+ *
+ * - MICROCHESS_UPLOAD_INTERVAL (optional)
+ *     Interval between uploads, in milliseconds.
+ *     Defaults: 3600000 (1 hour)
+ *     Example:
+ *       MICROCHESS_UPLOAD_INTERVAL=60000   # upload every 60 seconds (useful for testing)
+ *
+ * - RANDOMCHESS_PATH (optional)
+ *     Path to the JSON file containing random chess games (array). If not set,
+ *     defaults to ./randomchess.json (resolved relative to this file).
+ *     Example:
+ *       RANDOMCHESS_PATH=/var/data/microchess/randomchess.json
+ *
+ * - METADATA_PATH (optional)
+ *     Path where upload metadata (jsonbin response) will be written. If not set,
+ *     defaults to ./metadata.json (resolved relative to this file).
+ *     Example:
+ *       METADATA_PATH=/var/data/microchess/metadata.json
+ *
+ * Notes:
+ * - Place a .env file alongside the script or otherwise ensure the env vars are
+ *   available in the process environment when running the script.
+ * - The script will attempt to deduplicate games by the `fen` property before upload.
  */
 
 require('dotenv').config();
