@@ -15,7 +15,7 @@
   "author": "universalbit-dev",
   "license": "BSD-2-Clause",
   "dependencies": {
-    "dotenv": "^17.2.1",
+    "dotenv": "^17.2.3",
     "node-fetch": "^3.3.2",
     "winston": "^3.13.0"
   },
