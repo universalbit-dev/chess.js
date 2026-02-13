@@ -153,8 +153,15 @@ function usageAndExit(code = 0) {
     else { usageAndExit(1); }
   }
 
+  const BASE_DIR = path.resolve(__dirname);
   const filePath = fileArg ? path.resolve(fileArg) : DEFAULT_OUTPUT;
 
+   // Path Traversal Mitigation
+  if (!filePath.startsWith(BASE_DIR + path.sep)) {
+  console.error('Access to paths outside the allowed directory is forbidden.');
+  process.exit(1);
+  }
+  
   // If no args, list last few entries
   if (!seedArg && indexArg == null) {
     try {
