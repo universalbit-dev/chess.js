@@ -5,7 +5,7 @@ module.exports = {
       name: 'microchess-generator',
       script: './microchess.js',
       exec_mode: 'cluster',
-      instances: 1,
+      instances: 'max',
       env: {
         NODE_ENV: 'production'
       }
@@ -14,7 +14,7 @@ module.exports = {
       name: 'microchess-uploader',
       script: './jsonbin_randomchess.js',
       exec_mode: 'cluster',
-      instances: 1,
+      instances: 'max',
       env: {
         NODE_ENV: 'production'
       }
