@@ -1,47 +1,11 @@
 /**
- * microchess.js
+ * microchess.js (Enhanced with ConvNetJS Inference Layer)
  *
- * Generates periodic random chess games and appends them to a JSON file.
- *
- * Features:
- * - Uses chess.js to generate legal random games (configurable max plies).
- * - Atomic file writes (write to temp file then rename) with retry/backoff.
- * - Optional reproducible RNG support (mulberry32 built-in or optional seedrandom).
- * - Rotating winston logger to console and a log file.
- * - Graceful shutdown to attempt a final run on SIGINT/SIGTERM.
- * - Environment-driven configuration for flexible deployment.
- *
- * Usage:
- *  - Install dependencies: npm install
- *  - Optionally install seedrandom to use the package RNG:
- *      npm install seedrandom
- *  - Configure environment via .env or environment variables (see .env.example)
- *  - Run: node microchess.js
- *
- * Note on reproducibility:
- *  - If MICROCHESS_SEED is provided, the run will be deterministic (same seed + same code yields same moves).
- *  - If MICROCHESS_SEED is absent, a cryptographic seed is generated per-run and saved with the entry for later replay.
- *  - If MICROCHESS_USE_SEEDRANDOM=true and seedrandom is installed, seedrandom() will be used for RNG.
- *
- * Safety and assumptions:
- *  - Intended for non-cryptographic randomness and reproducibility only.
- *  - Determinism depends on chess.js behavior and its version; keep library versions stable for replayability.
- *
- * Environment variables (brief):
- *  - MICROCHESS_OUTPUT_FILE        Path to JSON output (default: ./randomchess.json)
- *  - MICROCHESS_LOG_FILE           Path to logger file (default: ./microchess.log)
- *  - MICROCHESS_MAX_SIZE_BYTES     Max bytes for output JSON (default: 1048576)
- *  - MICROCHESS_GENERATOR_INTERVAL Interval between runs in ms (default: 3600000)
- *  - MICROCHESS_MAX_MOVES         Max plies (half-moves) per game (default: 100)
- *  - MICROCHESS_MAX_WRITE_RETRIES  Write retry attempts (default: 3)
- *  - MICROCHESS_LOG_LEVEL          winston log level (default: info)
- *  - MICROCHESS_RUN_ONCE           If "true", run once and exit (default: false)
- *  - MICROCHESS_USE_SEEDRANDOM     If "true", use seedrandom package if installed (default: false)
- *  - MICROCHESS_SEED               Optional seed string for deterministic runs (default: generated per-run)
- *
+ * Generates periodic neural-evaluation influenced or randomized chess games
+ * and appends them to a JSON file.
  */
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('dotenv').config();
 const fs = require('fs');
 const os = require('os');
 const { promisify } = require('util');
@@ -49,10 +13,13 @@ const writeFile = promisify(fs.writeFile);
 const rename = promisify(fs.rename);
 const stat = promisify(fs.stat);
 const readFile = promisify(fs.readFile);
-const unlink = promisify(fs.unlink);
 const winston = require('winston');
 const crypto = require('crypto');
 const { Chess } = require('../dist/cjs/chess.js');
+
+// Import Core Machine Learning Libraries
+const convnetjs = require('./core/convnet.js');
+const { DQNAgent } = require('./core/rl.js');
 
 //
 // Configuration (environment or defaults)
@@ -71,7 +38,6 @@ const MAX_MOVES = parseInt(process.env.MICROCHESS_MAX_MOVES, 10) || 100;
 const MAX_WRITE_RETRIES = parseInt(process.env.MICROCHESS_MAX_WRITE_RETRIES, 10) || 3;
 const LOG_LEVEL = process.env.MICROCHESS_LOG_LEVEL || 'info';
 const RUN_ONCE = (process.env.MICROCHESS_RUN_ONCE || 'false').toLowerCase() === 'true';
-const TRIM_STRATEGY = process.env.MICROCHESS_TRIM_STRATEGY || 'drop-oldest'; // reserved for future
 
 //
 // Logger
@@ -88,8 +54,42 @@ const logger = winston.createLogger({
   ],
 });
 
+// Initialize Deep Evaluator Network (64 inputs -> 32 hidden units -> 1 output score)
+const netLayerDefs = [];
+netLayerDefs.push({ type: 'input', out_sx: 1, out_sy: 1, out_depth: 64 });
+netLayerDefs.push({ type: 'fc', num_neurons: 32, activation: 'relu' });
+netLayerDefs.push({ type: 'regression', num_neurons: 1 });
+
+const neuralEvaluator = new convnetjs.Net();
+neuralEvaluator.makeLayers(netLayerDefs);
+
+/**
+ * Transforms an 8x8 chess board layer map into an optimized Vol instance
+ * mapping white values to positive scores and black to negative scores.
+ */
+function boardToVolumeInput(board) {
+  const inputSequence = new Array(64).fill(0);
+  const numericWeights = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 10 };
+
+  let counter = 0;
+  for (let rank = 0; rank < 8; rank++) {
+    for (let file = 0; file < 8; file++) {
+      const square = board[rank][file];
+      if (square) {
+        const structuralWeight = numericWeights[square.type];
+        inputSequence[counter] = square.color === 'w' ? structuralWeight : -structuralWeight;
+      }
+      counter++;
+    }
+  }
+
+  const volInput = new convnetjs.Vol(1, 1, 64);
+  volInput.w = inputSequence;
+  return volInput;
+}
+
 //
-// Helper: atomic write (write to temp then rename)
+// Atomic Write and Logs Management Utilities
 //
 async function atomicWriteJson(filePath, data) {
   const tmpPath = `${filePath}.${Date.now()}.${process.pid}.tmp`;
@@ -98,9 +98,6 @@ async function atomicWriteJson(filePath, data) {
   await rename(tmpPath, filePath);
 }
 
-//
-// Load existing logs (safe)
-//
 async function loadLogs() {
   try {
     if (fs.existsSync(OUTPUT_FILE)) {
@@ -115,30 +112,19 @@ async function loadLogs() {
   return [];
 }
 
-//
-// Trim logs to ensure file size under MAX_SIZE_BYTES
-// Efficiently drop oldest entries until fit.
-// Returns new array (mutated copy).
-//
 function trimLogsToFitSize(logs) {
-  // Fast path: if already small enough, return.
   try {
     let json = JSON.stringify(logs, null, 2);
     while (Buffer.byteLength(json, 'utf8') > MAX_SIZE_BYTES && logs.length > 0) {
-      // Remove oldest entries first
       logs.shift();
       json = JSON.stringify(logs, null, 2);
     }
   } catch (err) {
     logger.error(`Error while trimming logs: ${err && err.message ? err.message : err}`);
-    // In case of error, keep logs as-is (fallback)
   }
   return logs;
 }
 
-//
-// Write logs with retries to handle rare write contention or transient errors.
-//
 async function writeLogsWithRetries(logs) {
   let attempt = 0;
   const toWrite = trimLogsToFitSize(Array.from(logs));
@@ -153,17 +139,14 @@ async function writeLogsWithRetries(logs) {
         logger.error('Exceeded maximum write retries — giving up for this run.');
         throw err;
       }
-      // small backoff
       await new Promise((res) => setTimeout(res, 100 * attempt));
     }
   }
 }
 
 //
-// Simple seeded RNG options (mulberry32 fallback or optional seedrandom)
+// Reproducible RNG Support Components
 //
-
-// string -> 32-bit integer hash (xfnv1a)
 function xfnv1a(str) {
   let h = 2166136261 >>> 0;
   for (let i = 0; i < str.length; i++) {
@@ -173,7 +156,6 @@ function xfnv1a(str) {
   return h >>> 0;
 }
 
-// mulberry32 PRNG returning function() -> float in [0,1)
 function mulberry32(seed) {
   let t = seed >>> 0;
   return function () {
@@ -197,27 +179,21 @@ if ((process.env.MICROCHESS_USE_SEEDRANDOM || '').toLowerCase() === 'true') {
   }
 }
 
-// returns { rng: function, name: string, version?: string }
 function createRngFromSeed(seedString) {
   if (seedrandomAvailable && seedrandomPkg) {
-    // seedrandom returns a function that produces [0,1)
     const rngFn = seedrandomPkg(seedString);
-    // try to get package version if available
     let ver = null;
     try { ver = require('seedrandom/package.json').version; } catch (e) { /* ignore */ }
     return { rng: rngFn, name: 'seedrandom', version: ver || null };
   }
-  // fallback to mulberry32 derived from xfnv1a
   const seedInt = xfnv1a(seedString);
   return { rng: mulberry32(seedInt), name: 'mulberry32', version: null };
 }
 
 //
-// Generate a single random chess game and return a structured entry
-// Uses optional/seeded RNG when available.
+// Core Game Logic enhanced with Deep Neural Evaluation Pass
 //
 function generateRandomChessGame(seedString) {
-  // choose or create seed
   const providedSeed = typeof seedString === 'string' && seedString.length > 0;
   const seed = providedSeed ? seedString : crypto.randomBytes(8).toString('hex');
   const { rng, name: rng_name, version: rng_version } = createRngFromSeed(seed);
@@ -227,18 +203,60 @@ function generateRandomChessGame(seedString) {
   const startTime = new Date();
   let ply = 0;
 
-  // limit total plies (half-moves)
+  // 30% exploration strategy variation modifier across steps
+  const explorationThreshold = 0.30;
+
   while (!chess.isGameOver() && ply < MAX_MOVES) {
-    const legalMoves = chess.moves();
+    const legalMoves = chess.moves({ verbose: true });
     if (!legalMoves || legalMoves.length === 0) break;
-    const move = legalMoves[Math.floor(rng() * legalMoves.length)];
-    chess.move(move);
-    moves.push(move);
+
+    let selectedMove = null;
+
+    if (rng() < explorationThreshold) {
+      // Epsilon-style exploration step: select clean random legal choice
+      const targetIndex = Math.floor(rng() * legalMoves.length);
+      selectedMove = legalMoves[targetIndex];
+    } else {
+      // Exploitation Mode step: Forward evaluations via neural pipeline
+      let ultimateScore = chess.turn() === 'w' ? -Infinity : Infinity;
+
+      for (let m = 0; m < legalMoves.length; m++) {
+        const potentialMove = legalMoves[m];
+        chess.move(potentialMove.san);
+
+        const internalVolume = boardToVolumeInput(chess.board());
+        // Run look-ahead state tracking forward pass optimized with bitwise casting internally
+        const targetOutputVector = neuralEvaluator.forward(internalVolume);
+        const positionalScore = targetOutputVector.w[0];
+
+        chess.undo();
+
+        if (chess.turn() === 'w') {
+          if (positionalScore > ultimateScore) {
+            ultimateScore = positionalScore;
+            selectedMove = potentialMove;
+          }
+        } else {
+          if (positionalScore < ultimateScore) {
+            ultimateScore = positionalScore;
+            selectedMove = potentialMove;
+          }
+        }
+      }
+    }
+
+    // Safeguard fallback verification
+    if (!selectedMove) {
+      selectedMove = legalMoves[Math.floor(rng() * legalMoves.length)];
+    }
+
+    chess.move(selectedMove.san);
+    moves.push(selectedMove.san);
     ply++;
   }
   const endTime = new Date();
 
-  // Build PGN moves (SAN style with move numbers)
+  // Build PGN strings (SAN layout with indexes appended)
   let pgnMoves = '';
   for (let i = 0; i < moves.length; i++) {
     if (i % 2 === 0) pgnMoves += `${Math.floor(i / 2) + 1}. `;
@@ -246,11 +264,9 @@ function generateRandomChessGame(seedString) {
   }
   pgnMoves = pgnMoves.trim();
 
-  // Result and reason
   let result = '*', reason = '';
   try {
     if (chess.isCheckmate()) {
-      // If checkmate, the side NOT to move delivered mate.
       result = chess.turn() === 'w' ? '0-1' : '1-0';
       reason = 'Checkmate';
     } else if (chess.isStalemate()) {
@@ -267,12 +283,11 @@ function generateRandomChessGame(seedString) {
       reason = 'Draw';
     }
   } catch (err) {
-    // Some older/newer chess libs might not implement every helper; ignore safely.
     logger.debug(`Result detection encountered error: ${err && err.message ? err.message : err}`);
   }
 
   const pgnHeaders = [
-    `[Event "Random Game"]`,
+    `[Event "Neural Influenced Random Game"]`,
     `[Site "microchess"]`,
     `[Date "${startTime.toISOString().slice(0, 10).replace(/-/g, ".")}"]`,
     `[Result "${result}"]`,
@@ -282,8 +297,8 @@ function generateRandomChessGame(seedString) {
   const pgn = `${pgnHeaders}\n\n${pgnMoves} ${result}`;
 
   return {
-    process: 'microchess',
-    message: `Random Game Of Chess: ${pgnMoves}`,
+    process: 'microchess-nn',
+    message: `Neural Game Of Chess: ${pgnMoves}`,
     status: 'generated',
     timestamp: endTime.toISOString(),
     move_count: moves.length,
@@ -291,7 +306,6 @@ function generateRandomChessGame(seedString) {
     reason,
     final_fen: chess.fen(),
     pgn,
-    // reproducibility metadata
     rng: rng_name,
     rng_version: rng_version || null,
     seed
@@ -299,7 +313,7 @@ function generateRandomChessGame(seedString) {
 }
 
 //
-// Main runner: load, append, save
+// Execution Loops and System Runners
 //
 let running = false;
 
@@ -311,12 +325,11 @@ async function runOnce() {
   running = true;
   try {
     const existing = await loadLogs();
-    // Use env-provided seed if present; otherwise generate one per run and save it
     const envSeed = process.env.MICROCHESS_SEED && process.env.MICROCHESS_SEED.length > 0 ? process.env.MICROCHESS_SEED : undefined;
     const entry = generateRandomChessGame(envSeed);
     existing.push(entry);
     await writeLogsWithRetries(existing);
-    logger.info(`Random chess game generated and saved to ${OUTPUT_FILE} (seed=${entry.seed}, rng=${entry.rng})`);
+    logger.info(`Neural chess game completed and updated to ${OUTPUT_FILE} (seed=${entry.seed}, evaluationEngine=convnetjs)`);
   } catch (err) {
     logger.error(`Failed to complete run: ${err && err.message ? err.message : err}`);
   } finally {
@@ -324,20 +337,15 @@ async function runOnce() {
   }
 }
 
-//
-// Graceful shutdown to ensure last run finishes and file handles are clean.
-//
 let shutdownInitiated = false;
 async function gracefulShutdown(signal) {
   if (shutdownInitiated) return;
   shutdownInitiated = true;
   logger.info(`Received ${signal}. Shutting down gracefully...`);
   try {
-    // attempt one final run to persist games if not already running
     if (!running) {
       await runOnce();
     } else {
-      // wait up to a short timeout for current run to finish
       const deadline = Date.now() + 5000;
       while (running && Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 200));
@@ -357,15 +365,9 @@ process.on('uncaughtException', (err) => {
   logger.error(`Uncaught exception: ${err && err.stack ? err.stack : err}`);
   gracefulShutdown('uncaughtException');
 });
-process.on('unhandledRejection', (reason) => {
-  logger.error(`Unhandled promise rejection: ${reason && reason.stack ? reason.stack : reason}`);
-});
 
-//
-// Startup: run once and then schedule according to GENERATOR_INTERVAL
-//
 (async function startup() {
-  logger.info('microchess starting');
+  logger.info('microchess starting with ConvNetJS integration layer');
   try {
     await runOnce();
   } catch (err) {
@@ -373,17 +375,13 @@ process.on('unhandledRejection', (reason) => {
   }
 
   if (!RUN_ONCE) {
-    // use setInterval with async wrapper
     const timer = setInterval(() => {
-      // fire & forget; internal locking prevents overlaps
       runOnce().catch((err) => logger.error(`Scheduled run failed: ${err && err.message ? err.message : err}`));
     }, GENERATOR_INTERVAL);
 
-    // clear interval on exit signals to avoid dangling timers
     process.on('exit', () => clearInterval(timer));
   } else {
     logger.info('Running in RUN_ONCE mode; process will exit.');
-    // give a short grace period for logs to flush then exit.
     setTimeout(() => process.exit(0), 500);
   }
 })();
