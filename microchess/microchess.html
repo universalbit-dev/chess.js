@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MicroChess AI - Realtime Dashboard</title>
+  
+  <!-- UI Core Assets & Icon Fonts -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cm-chessboard@4/assets/styles/cm-chessboard.css">
+  
+  <style>
+    body { 
+      background-color: #0f111a; 
+      color: #c3c7db; 
+      font-family: 'Segoe UI', Tahoma, sans-serif; 
+      -webkit-tap-highlight-color: transparent;
+    }
+    .card { 
+      background-color: #1a1c2a; 
+      border: 1px solid #2b2e4a; 
+      border-radius: 8px; 
+    }
+    .metric-value { 
+      font-size: 1.4rem; /* Scaled down slightly to prevent mobile text clipping */
+      font-weight: bold; 
+      color: #00e676; 
+      transition: color 0.3s ease;
+    }
+    @media(min-width: 576px) {
+      .metric-value { font-size: 1.8rem; }
+    }
+    .chart-container { 
+      position: relative; 
+      height: 180px; /* More compact chart bounding box on mobile devices */
+      width: 100%; 
+    }
+    @media(min-width: 768px) {
+      .chart-container { height: 240px; }
+    }
+    .board-box { 
+      max-width: 100%; 
+      margin: 0 auto; 
+      background: #23263d; 
+      padding: 8px; 
+      border-radius: 8px; 
+      border: 1px solid #3b3f63; 
+    }
+    
+    /* Mobile Terminal Constraints */
+    .terminal-stream {
+      max-height: 160px; 
+      overflow-y: auto;
+    }
+    @media(min-width: 992px) {
+      .terminal-stream { max-height: 215px; }
+    }
+    
+    .animate-pulse { animation: pulseGlow 2s infinite alternate; }
+    .animate-fade-in { animation: fadeInEffect 0.4s ease-out forwards; }
+    @keyframes pulseGlow {
+      0% { transform: scale(1); filter: brightness(1); }
+      100% { transform: scale(1.01); filter: brightness(1.15); }
+    }
+    @keyframes fadeInEffect {
+      from { opacity: 0; transform: translateY(-3px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .terminal-stream::-webkit-scrollbar { width: 4px; }
+    .terminal-stream::-webkit-scrollbar-track { background: #131522; }
+    .terminal-stream::-webkit-scrollbar-thumb { background: #3b3f63; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Realtime Navigation Bar -->
+  <nav class="navbar navbar-dark bg-dark border-bottom border-secondary mb-3 shadow">
+    <div class="container-fluid px-3 flex-nowrap justify-content-between align-items-center">
+      <span class="navbar-brand mb-0 h6 text-truncate d-flex align-items-center">
+        <i class="bi bi-cpu-fill me-2 text-info animate-pulse"></i>
+        <span>MicroChess <span class="text-info fw-semibold d-none d-xs-inline">Console</span></span>
+      </span>
+      <span class="badge bg-success text-dark px-2 py-1.5 rounded-pill fw-bold small shadow-sm d-flex align-items-center" style="font-size: 0.75rem;">
+        <i class="bi bi-activity me-1 animate-pulse"></i> Live Sync
+      </span>
+    </div>
+  </nav>
+
+  <!-- Application Grid Core -->
+  <div class="container-fluid px-3">
+    <!-- order-lg-last flips layout: board goes top on mobile, sits side panel on desktop -->
+    <div class="row g-3">
+      
+      <!-- RIGHT PANEL (BOARD) - FORCED TO TOP ON MOBILE VIA order-first -->
+      <div class="col-12 col-lg-5 col-xl-4 order-first order-lg-last">
+        <div class="card p-3 shadow-sm position-sticky" style="top: 16px;">
+          <h6 class="text-center text-white mb-2 fw-semibold">
+            <i class="bi bi-eye text-info me-2"></i>Active Evaluation Ply
+          </h6>
+          <div class="board-box shadow-lg">
+            <div id="live-board" style="width: 100%;"></div>
+          </div>
+          <div class="mt-2 text-center text-muted font-monospace lh-sm text-truncate w-100" id="game-meta" style="font-size: 0.7rem; letter-spacing: -0.2px;">
+            Awaiting system generation iterations...
+          </div>
+        </div>
+      </div>
+      
+      <!-- LEFT PANEL (METRICS & DATA STREAMS) -->
+      <div class="col-12 col-lg-7 col-xl-8">
+        <div class="row g-2 mb-3">
+          <div class="col-4">
+            <div class="card p-2 text-center shadow-sm">
+              <div class="text-secondary" style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase;">RNG</div>
+              <div class="metric-value text-info text-truncate mt-1" id="epsilon-val" style="font-size: 1.1rem;">Loading...</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="card p-2 text-center shadow-sm">
+              <div class="text-secondary" style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase;">TD Loss</div>
+              <div class="metric-value text-danger mt-1" id="avg-loss" style="font-size: 1.1rem;">0.0000</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="card p-2 text-center shadow-sm">
+              <div class="text-secondary" style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase;">Score</div>
+              <div class="metric-value text-warning mt-1" id="game-result" style="font-size: 1.1rem;">*</div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="card p-2 px-3 shadow-sm">
+              <div class="text-secondary" style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase;">Active FEN Vector</div>
+              <div id="fen-string" class="font-monospace text-warning mt-1 text-truncate" style="font-size: 0.75rem;">
+                Syncing streams...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-Time Activity Log Stream Terminal -->
+        <div class="card p-3 mb-3">
+          <h6 class="text-white mb-2 fw-semibold">
+            <i class="bi bi-terminal text-info me-2"></i>Live PGN Activity Terminal
+          </h6>
+          <div class="table-responsive terminal-stream">
+            <table class="table table-dark table-borderless align-middle mb-0">
+              <thead>
+                <tr class="text-secondary border-bottom border-secondary-subtle x-small" style="font-size: 0.7rem;">
+                  <th style="width: 25%">Time</th>
+                  <th style="width: 75%">Ply Sequence</th>
+                </tr>
+              </thead>
+              <tbody id="log-stream-body" style="font-size: 0.75rem;">
+                <tr>
+                  <td colspan="2" class="text-center text-muted py-2">
+                    Awaiting broadcast...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Loss chart visualization card container -->
+        <div class="card p-3 shadow-sm mb-3">
+          <h6 class="text-white mb-2 fw-semibold">
+            <i class="bi bi-graph-down text-danger me-2"></i>Inference TD Loss Convergence
+          </h6>
+          <div class="chart-container">
+            <canvas id="lossChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Dependency Graph Injections -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Load your decoupled script cleanly from your current folder structure -->
+  <script type="module" src="./js/index.js"></script>
+</body>
+</html>
