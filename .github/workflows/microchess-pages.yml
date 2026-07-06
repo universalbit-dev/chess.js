@@ -32,13 +32,19 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: 'microchess/package-lock.json'
 
-      - name: Install dependencies (Isolated Mode)
+      # Step 1: Install root chess.js tools first so peggy/typescript are fully available
+      - name: Install parent repository dependencies
+        run: |
+          npm ci --no-audit --no-fund
+
+      # Step 2: Install subfolder modules securely now that the parent environment is satisfied
+      - name: Install microchess dependencies
         run: |
           cd microchess
           npm ci --install-links=false --no-audit --no-fund
 
+      # Step 3: Run your Webpack build sequence
       - name: Compile production assets via Webpack
         env:
           JSONBIN_API_KEY: ${{ secrets.JSONBIN_API_KEY }}
@@ -46,6 +52,7 @@ jobs:
           cd microchess
           npm run build
 
+      # Step 4: Stage deployment workspace
       - name: Stage distribution build artifacts in pages directory
         run: |
           mkdir -p pages
@@ -54,6 +61,7 @@ jobs:
           echo "=== Staged pages/ directory verification layout ==="
           ls -la pages
 
+      # Step 5: Deliver everything straight to the live web domain
       - name: Setup GitHub Pages hosting configuration
         uses: actions/configure-pages@v5
 
