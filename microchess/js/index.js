@@ -9,11 +9,11 @@ let lastRenderedSeed = null;
 // Determine endpoint location dynamically based on the active runtime address
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-// CRITICAL ROUTING MATRIX: Pulled dynamically from your environment setup
-const BIN_ID = process.env.JSONBIN_BIN_ID; 
+// ROUTING MATRIX: Fetch from your local development server API, 
+// or read the static file directly relative to your GitHub Pages root URL layout.
 const API_ENDPOINT = isLocal 
   ? '/api/live-game' 
-  : `https://api.jsonbin.io/v3/b/${BIN_ID}/latest`;
+  : './randomchess.json'; // Reads the static file right from your hosted assets repository
 
 // Initialize cm-chessboard targeting your layout anchor
 const board = new Chessboard(document.getElementById("live-board"), {
@@ -118,16 +118,10 @@ function updateDashboardDomElements(gameData) {
 // ═══════════════════════════════════════════════════════════════════════════
 async function checkEngineUpdateCycle() {
   try {
-    const headers = {};
-    if (!isLocal && process.env.JSONBIN_API_KEY) {
-      headers['X-Master-Key'] = process.env.JSONBIN_API_KEY;
-    }
-
-    const response = await fetch(API_ENDPOINT, { headers });
+    const response = await fetch(API_ENDPOINT);
     if (!response.ok) return;
 
-    const rawData = await response.json();
-    const targetRecord = rawData.record ? rawData.record : rawData;
+    const targetRecord = await response.json();
     if (!targetRecord || !targetRecord.final_fen) return;
 
     if (targetRecord.seed !== lastRenderedSeed) {
