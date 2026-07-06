@@ -19,8 +19,9 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    # 1. Point this job directly to your newly created custom environment to pull its specific secrets
     environment:
-      name: github-pages
+      name: microchess
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
@@ -45,9 +46,10 @@ jobs:
           npm ci --install-links=false --no-audit --no-fund
 
       # Step 3: Compile production assets via Webpack
+      # 2. Updated here to bind your exact custom environment secret key name: JSONBIN_KEY
       - name: Compile production assets via Webpack
         env:
-          JSONBIN_API_KEY: ${{ secrets.JSONBIN_API_KEY }}
+          JSONBIN_API_KEY: ${{ secrets.JSONBIN_KEY }}
         run: |
           cd microchess
           npm run build
