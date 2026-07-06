@@ -9,11 +9,10 @@ let lastRenderedSeed = null;
 // Determine endpoint location dynamically based on the active runtime address
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-// ROUTING MATRIX: Fetch from your local development server API, 
-// or read the static file directly relative to your GitHub Pages root URL layout.
+// ROUTING MATRIX: Read static collection directly relative to your Pages root folder location
 const API_ENDPOINT = isLocal 
   ? '/api/live-game' 
-  : './randomchess.json'; // Reads the static file right from your hosted assets repository
+  : './randomchess.json';
 
 // Initialize cm-chessboard targeting your layout anchor
 const board = new Chessboard(document.getElementById("live-board"), {
@@ -121,7 +120,17 @@ async function checkEngineUpdateCycle() {
     const response = await fetch(API_ENDPOINT);
     if (!response.ok) return;
 
-    const targetRecord = await response.json();
+    const rawData = await response.json();
+    if (!rawData) return;
+
+    // FIX: Extract the latest frame from the generated log list array
+    let targetRecord = null;
+    if (Array.isArray(rawData)) {
+      targetRecord = rawData[rawData.length - 1];
+    } else {
+      targetRecord = rawData;
+    }
+
     if (!targetRecord || !targetRecord.final_fen) return;
 
     if (targetRecord.seed !== lastRenderedSeed) {
