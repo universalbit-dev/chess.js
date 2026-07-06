@@ -6,8 +6,16 @@ import { Chessboard } from "https://cdn.jsdelivr.net/npm/cm-chessboard@4/src/cm-
 let telemetryTicks = 0;
 let lastRenderedSeed = null;
 
+// Determine endpoint location dynamically based on the active runtime address
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+// CRITICAL ROUTING MATRIX: Pulled dynamically from your environment setup
+const BIN_ID = process.env.JSONBIN_BIN_ID; 
+const API_ENDPOINT = isLocal 
+  ? '/api/live-game' 
+  : `https://api.jsonbin.io/v3/b/${BIN_ID}/latest`;
+
 // Initialize cm-chessboard targeting your layout anchor
-// CRITICAL FIX: The orientation parameter is inverted to map the standard perspective shown in your UI
 const board = new Chessboard(document.getElementById("live-board"), {
   position: "start",
   orientation: "black", 
@@ -51,18 +59,13 @@ const lossChart = new Chart(ctxLoss, {
 // ─── COMPONENT UI HANDLERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Parses out structural details from PGN outputs and injects them into the DOM stream
- */
 function processLivePgnDisplay(pgnText) {
   const logContainer = document.getElementById("log-stream-body");
   if (!logContainer || !pgnText) return;
 
-  // Isolate move payload lines from PGN structural header fields
   const pgnLines = pgnText.split('\n\n');
   const movesOnly = pgnLines[1] || pgnLines[0];
   
-  // Truncate overly massive ply sequences gracefully for clean Bootstrap layouts
   const cleanDisplay = movesOnly.length > 70 ? `${movesOnly.substring(0, 70)}...` : movesOnly;
   
   const timestamp = new Date().toLocaleTimeString();
@@ -75,22 +78,16 @@ function processLivePgnDisplay(pgnText) {
   
   logContainer.insertAdjacentHTML('afterbegin', newRowHTML);
 
-  // Maintain sliding DOM stack element limits to save layout render loops
   if (logContainer.children.length > 5) {
     logContainer.removeChild(logContainer.lastChild);
   }
 }
 
-/**
- * Triggers full state mapping parameters right out of parsed randomchess.json structures
- */
 function updateDashboardDomElements(gameData) {
-  // Direct text injection nodes
   document.getElementById("fen-string").innerText = gameData.final_fen;
   document.getElementById("epsilon-val").innerText = gameData.rng || "mulberry32";
   document.getElementById("game-meta").innerText = `Seed: ${gameData.seed} | Engine: ${gameData.process || 'microchess-nn'}`;
   
-  // Evaluate and dynamically switch styling badges according to match metrics
   const scoreBadge = document.getElementById("game-result");
   scoreBadge.innerText = gameData.result;
   
@@ -102,11 +99,9 @@ function updateDashboardDomElements(gameData) {
     scoreBadge.className = "metric-value text-warning";
   }
 
-  // Generate continuous convergence simulation profiles matching training state logs
   const derivedLoss = gameData.result === '*' ? Math.random() * 0.15 + 0.10 : 0.015;
   document.getElementById("avg-loss").innerText = derivedLoss.toFixed(4);
 
-  // Push values cleanly to sliding live visual charts
   telemetryTicks++;
   lossChart.data.labels.push(telemetryTicks);
   lossChart.data.datasets[0].data.push(derivedLoss);
@@ -115,7 +110,7 @@ function updateDashboardDomElements(gameData) {
     lossChart.data.labels.shift();
     lossChart.data.datasets[0].data.shift();
   }
-  lossChart.update('none'); // Optimized layout update skip
+  lossChart.update('none');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -123,21 +118,24 @@ function updateDashboardDomElements(gameData) {
 // ═══════════════════════════════════════════════════════════════════════════
 async function checkEngineUpdateCycle() {
   try {
-    const response = await fetch('/api/live-game');
+    const headers = {};
+    if (!isLocal && process.env.JSONBIN_API_KEY) {
+      headers['X-Master-Key'] = process.env.JSONBIN_API_KEY;
+    }
+
+    const response = await fetch(API_ENDPOINT, { headers });
     if (!response.ok) return;
 
-    const targetRecord = await response.json();
+    const rawData = await response.json();
+    const targetRecord = rawData.record ? rawData.record : rawData;
     if (!targetRecord || !targetRecord.final_fen) return;
 
-    // Only update and trigger vector board calculations if a fresh hash context appears
     if (targetRecord.seed !== lastRenderedSeed) {
       lastRenderedSeed = targetRecord.seed;
       
-      // Update data matrices
       updateDashboardDomElements(targetRecord);
       processLivePgnDisplay(targetRecord.pgn);
       
-      // Animate piece shifts smoothly to final layout targets
       await board.setPosition(targetRecord.final_fen, true);
     }
   } catch (err) {
@@ -148,7 +146,5 @@ async function checkEngineUpdateCycle() {
 // ═══════════════════════════════════════════════════════════════════════════
 // ─── INCEPTION INTERNALS
 // ═══════════════════════════════════════════════════════════════════════════
-
-// Spin up runtime scheduler sync cycles matching your 2-second server intervals
 setInterval(checkEngineUpdateCycle, 2000);
 checkEngineUpdateCycle();
