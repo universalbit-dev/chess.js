@@ -39,7 +39,6 @@ jobs:
           cd microchess
           npm ci --install-links=false --no-audit --no-fund
 
-      # OPTIMIZATION: Pass your repository secret into the Webpack compile execution environment
       - name: Compile production assets via Webpack
         env:
           JSONBIN_API_KEY: ${{ secrets.JSONBIN_API_KEY }}
@@ -47,13 +46,13 @@ jobs:
           cd microchess
           npm run build
 
-      <Step title="Stage assets" subtitle="Internal pass">
       - name: Stage distribution build artifacts in pages directory
         run: |
           mkdir -p pages
           cp microchess/microchess.html pages/index.html
           cp -r microchess/dist/* pages/
-      </Step>
+          echo "=== Staged pages/ directory verification layout ==="
+          ls -la pages
 
       - name: Setup GitHub Pages hosting configuration
         uses: actions/configure-pages@v5
