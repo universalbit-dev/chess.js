@@ -1,0 +1,68 @@
+name: Deploy MicroChess Dashboard to GitHub Pages
+
+on:
+  push:
+    branches:
+      - microchess
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js Runtime Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'microchess/package-lock.json'
+
+      - name: Install dependencies (Isolated Mode)
+        run: |
+          cd microchess
+          npm ci --install-links=false --no-audit --no-fund
+
+      # OPTIMIZATION: Pass your repository secret into the Webpack compile execution environment
+      - name: Compile production assets via Webpack
+        env:
+          JSONBIN_API_KEY: ${{ secrets.JSONBIN_API_KEY }}
+        run: |
+          cd microchess
+          npm run build
+
+      <Step title="Stage assets" subtitle="Internal pass">
+      - name: Stage distribution build artifacts in pages directory
+        run: |
+          mkdir -p pages
+          cp microchess/microchess.html pages/index.html
+          cp -r microchess/dist/* pages/
+      </Step>
+
+      - name: Setup GitHub Pages hosting configuration
+        uses: actions/configure-pages@v5
+
+      - name: Upload compiled website deployment archive
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './pages'
+
+      - name: Deploy active assets to GitHub Pages live domain
+        id: deployment
+        uses: actions/deploy-pages@v4
