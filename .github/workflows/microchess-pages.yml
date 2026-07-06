@@ -19,7 +19,7 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    # 1. Point this job directly to your newly created custom environment to pull its specific secrets
+    # Point this job directly to your newly created custom environment
     environment:
       name: microchess
       url: ${{ steps.deployment.outputs.page_url }}
@@ -45,8 +45,7 @@ jobs:
           cd microchess
           npm ci --install-links=false --no-audit --no-fund
 
-      # Step 3: Compile production assets via Webpack
-      # 2. Updated here to bind your exact custom environment secret key name: JSONBIN_KEY
+      # Step 3: Compile production assets via Webpack, passing your custom Environment secret
       - name: Compile production assets via Webpack
         env:
           JSONBIN_API_KEY: ${{ secrets.JSONBIN_KEY }}
@@ -72,12 +71,17 @@ jobs:
       - name: List PM2 processes (Build Logs Audit)
         run: pm2 list
 
-      # Step 7: Stage distribution build artifacts into a clean deployment workspace
+      # Step 7: Stage distribution build artifacts into a clean deployment workspace (Fixes URL Root)
       - name: Stage distribution build artifacts in pages directory
         run: |
+          # 1. Purge any leftover files or implicit default repository configurations
+          rm -rf pages
           mkdir -p pages
+          
+          # 2. Map microchess.html directly to index.html so it loads on the root domain
           cp microchess/microchess.html pages/index.html
           cp -r microchess/dist/* pages/
+          
           echo "=== Staged pages/ directory verification layout ==="
           ls -la pages
 
