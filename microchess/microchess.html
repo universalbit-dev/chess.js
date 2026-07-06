@@ -179,7 +179,8 @@
 
   <!-- Dependency Graph Injections -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Load your decoupled script cleanly from your current folder structure -->
-  <script type="module" src="./js/index.js"></script>
+  
+  <!-- FIX: Points script entry node straight to the Webpack bundle distribution directory -->
+  <script type="module" src="dist/bundle.js"></script>
 </body>
 </html>
