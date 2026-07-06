@@ -23,7 +23,7 @@
       border-radius: 8px; 
     }
     .metric-value { 
-      font-size: 1.4rem; /* Scaled down slightly to prevent mobile text clipping */
+      font-size: 1.4rem; 
       font-weight: bold; 
       color: #00e676; 
       transition: color 0.3s ease;
@@ -33,7 +33,7 @@
     }
     .chart-container { 
       position: relative; 
-      height: 180px; /* More compact chart bounding box on mobile devices */
+      height: 180px; 
       width: 100%; 
     }
     @media(min-width: 768px) {
@@ -80,7 +80,7 @@
     <div class="container-fluid px-3 flex-nowrap justify-content-between align-items-center">
       <span class="navbar-brand mb-0 h6 text-truncate d-flex align-items-center">
         <i class="bi bi-cpu-fill me-2 text-info animate-pulse"></i>
-        <span>MicroChess <span class="text-info fw-semibold d-none d-xs-inline">Console</span></span>
+        <span>MicroChess <span class="text-info fw-semibold d-none d-sm-inline">Console</span></span>
       </span>
       <span class="badge bg-success text-dark px-2 py-1.5 rounded-pill fw-bold small shadow-sm d-flex align-items-center" style="font-size: 0.75rem;">
         <i class="bi bi-activity me-1 animate-pulse"></i> Live Sync
@@ -90,7 +90,6 @@
 
   <!-- Application Grid Core -->
   <div class="container-fluid px-3">
-    <!-- order-lg-last flips layout: board goes top on mobile, sits side panel on desktop -->
     <div class="row g-3">
       
       <!-- RIGHT PANEL (BOARD) - FORCED TO TOP ON MOBILE VIA order-first -->
@@ -145,7 +144,7 @@
             <i class="bi bi-terminal text-info me-2"></i>Live PGN Activity Terminal
           </h6>
           <div class="table-responsive terminal-stream">
-            <table class="table table-dark table-borderless align-middle mb-0">
+            <table class="table table-dark table-borderless align-middle mb-0" style="table-layout: fixed;">
               <thead>
                 <tr class="text-secondary border-bottom border-secondary-subtle x-small" style="font-size: 0.7rem;">
                   <th style="width: 25%">Time</th>
@@ -169,7 +168,7 @@
             <i class="bi bi-graph-down text-danger me-2"></i>Inference TD Loss Convergence
           </h6>
           <div class="chart-container">
-            <canvas id="lossChart"></canvas>
+            <canvas id="lossChart" height="100%" width="100%"></canvas>
           </div>
         </div>
       </div>
@@ -180,7 +179,7 @@
   <!-- Dependency Graph Injections -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
-  <!-- FIX: Points script entry node straight to the Webpack bundle distribution directory -->
+  <!-- CORRECT COMPILATION TARGET: Point straight to your production Webpack distribution bundle -->
   <script type="module" src="dist/bundle.js"></script>
 </body>
 </html>
