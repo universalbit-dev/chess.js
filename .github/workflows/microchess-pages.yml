@@ -45,10 +45,11 @@ jobs:
           cd microchess
           npm ci --install-links=false --no-audit --no-fund
 
-      # Step 3: Compile production assets via Webpack, passing your custom Environment secret
+      # Step 3: Compile production assets via Webpack, passing your custom Environment secrets
       - name: Compile production assets via Webpack
         env:
           JSONBIN_API_KEY: ${{ secrets.JSONBIN_KEY }}
+          JSONBIN_BIN_ID: ${{ secrets.JSONBIN_BIN_ID }}  # <-- Securely hooks up your Bin ID for Webpack bundling!
         run: |
           cd microchess
           npm run build
