@@ -6,10 +6,11 @@ import { Chessboard } from "https://cdn.jsdelivr.net/npm/cm-chessboard@4/src/cm-
 let telemetryTicks = 0;
 let lastRenderedSeed = null;
 
-// Determine endpoint location dynamically based on the active runtime address
+// Determine endpoint location dynamically based on the active hosting environment
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-// ROUTING MATRIX: Read static collection directly relative to your Pages root folder location
+// ROUTING ROUTINE: Talk to the Express engine locally, or fall back to the static 
+// randomchess.json flat file hosted seamlessly right beside index.html on GitHub Pages.
 const API_ENDPOINT = isLocal 
   ? '/api/live-game' 
   : './randomchess.json';
@@ -123,16 +124,21 @@ async function checkEngineUpdateCycle() {
     const rawData = await response.json();
     if (!rawData) return;
 
-    // FIX: Extract the latest frame from the generated log list array
+    // DATA UNPACKING HARMONIZATION:
+    // If it's an array log (GitHub Pages static host), parse the newest index entry.
+    // If it's a single raw JSON response profile (Local Express), load it immediately.
     let targetRecord = null;
     if (Array.isArray(rawData)) {
-      targetRecord = rawData[rawData.length - 1];
+      targetRecord = rawData[rawData.length - 1]; // Pull latest frame from log array[cite: 2]
+    } else if (rawData.record && Array.isArray(rawData.record)) {
+      targetRecord = rawData.record[rawData.record.length - 1]; // JSONBin fallback structure map
     } else {
       targetRecord = rawData;
     }
 
     if (!targetRecord || !targetRecord.final_fen) return;
 
+    // Check seed boundaries to prevent repetitive canvas repaint cycles
     if (targetRecord.seed !== lastRenderedSeed) {
       lastRenderedSeed = targetRecord.seed;
       
