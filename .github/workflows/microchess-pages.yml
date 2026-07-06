@@ -33,18 +33,18 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      # Step 1: Install root chess.js tools first so peggy/typescript are fully available
+      # Step 1: Install parent repository dependencies so peggy/typescript are available
       - name: Install parent repository dependencies
         run: |
           npm ci --no-audit --no-fund
 
-      # Step 2: Install subfolder modules securely now that the parent environment is satisfied
+      # Step 2: Install microchess dependencies
       - name: Install microchess dependencies
         run: |
           cd microchess
           npm ci --install-links=false --no-audit --no-fund
 
-      # Step 3: Run your Webpack build sequence
+      # Step 3: Compile production assets via Webpack
       - name: Compile production assets via Webpack
         env:
           JSONBIN_API_KEY: ${{ secrets.JSONBIN_API_KEY }}
@@ -52,7 +52,25 @@ jobs:
           cd microchess
           npm run build
 
-      # Step 4: Stage deployment workspace
+      # Step 4: Install PM2 globally for CI Smoke Testing
+      - name: Install PM2 globally
+        run: npm install -g pm2
+
+      # Step 5: Start app with PM2 (For CI validation testing only)
+      - name: Start app with PM2 (CI Verification Pass)
+        run: |
+          cd microchess
+          if [ -f microchess.config.js ]; then
+            pm2 start microchess.config.js
+          else
+            echo "No PM2 config found, skipping runtime test."
+          fi
+
+      # Step 6: Log PM2 process matrix status to build logs
+      - name: List PM2 processes (Build Logs Audit)
+        run: pm2 list
+
+      # Step 7: Stage distribution build artifacts into a clean deployment workspace
       - name: Stage distribution build artifacts in pages directory
         run: |
           mkdir -p pages
@@ -61,7 +79,7 @@ jobs:
           echo "=== Staged pages/ directory verification layout ==="
           ls -la pages
 
-      # Step 5: Deliver everything straight to the live web domain
+      # Step 8: Deliver static assets straight to the live web domain
       - name: Setup GitHub Pages hosting configuration
         uses: actions/configure-pages@v5
 
