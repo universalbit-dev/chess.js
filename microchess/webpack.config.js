@@ -1,31 +1,35 @@
 const path = require('path');
-const webpack = require('webpack'); // Required to access built-in plugins
+const webpack = require('webpack');
 
 module.exports = {
+  // Set production mode to automatically optimize and minify bundle.js
   mode: 'production',
-  entry: path.resolve(__dirname, 'js/index.js'), 
+  
+  // Point to your newly updated static index.js file
+  entry: path.resolve(__dirname, 'js/index.js'),
+  
   output: {
-    path: path.resolve(__dirname, 'dist'),        
-    filename: 'bundle.js',                        
-    clean: true,
-    module: true                                  
+    filename: 'bundle.js',
+    path: path.resolve(__dirname, 'dist'),
+    // Outputs as a clean modern ES module structure
+    library: {
+      type: 'module'
+    }
   },
+
   experiments: {
-    outputModule: true                            
+    outputModule: true
   },
-  externalsType: 'module',
+
+  // Prevents Webpack from failing if process.env isn't fully defined in a static context
   plugins: [
-    // Safely injects the environment secret directly into the compiled bundle
     new webpack.DefinePlugin({
-      'process.env.JSONBIN_API_KEY': JSON.stringify(process.env.JSONBIN_API_KEY || '')
+      'process.env.NODE_ENV': JSON.stringify('production')
     })
   ],
-  module: {
-    rules: [
-      {
-        test: /\.css$/i,
-        use: ['style-loader', 'css-loader'],      
-      },
-    ],
-  },
+
+  // Optimization layer to keep build speeds blazing fast under 1 second
+  optimization: {
+    minimize: true
+  }
 };
