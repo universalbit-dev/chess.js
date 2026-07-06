@@ -5,6 +5,7 @@
   "main": "microchess.js",
   "scripts": {
     "postinstall": "chmod +x make-certs.sh && ./make-certs.sh",
+    "build": "webpack --config webpack.config.js",
     "start": "pm2 start microchess.config.js",
     "stop": "pm2 stop microchess.config.js",
     "dev": "concurrently -n \"ENGINE,SERVER,UPLOADER\" -c \"bgBlue,bgGreen,bgMagenta\" \"node microchess.js\" \"node https_server.js\" \"node jsonbin_randomchess.js\""
@@ -16,11 +17,13 @@
     "winston",
     "express",
     "chartjs",
-    "convnetjs"
+    "convnetjs",
+    "webpack"
   ],
   "author": "universalbit-dev",
   "license": "BSD-2-Clause",
   "dependencies": {
+    "chess.js": "file:../",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "fs-extra": "^11.2.0",
@@ -28,6 +31,10 @@
     "winston": "^3.13.0"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0"
+    "concurrently": "^9.2.0",
+    "css-loader": "^6.10.0",
+    "style-loader": "^3.3.4",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.4"
   }
 }
