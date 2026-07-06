@@ -19,7 +19,7 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    # Point this job directly to your newly created custom environment
+    # Point this job directly to your custom microchess environment profile
     environment:
       name: microchess
       url: ${{ steps.deployment.outputs.page_url }}
@@ -71,19 +71,22 @@ jobs:
       - name: List PM2 processes (Build Logs Audit)
         run: pm2 list
 
-      # Step 7: Stage distribution build artifacts into a clean deployment workspace (Fixes URL Root)
+      # Step 7: Stage distribution build artifacts into a clean deployment workspace
       - name: Stage distribution build artifacts in pages directory
         run: |
-          # 1. Purge any leftover files or implicit default repository configurations
+          # 1. Clean workspace completely to remove default markdown page structures
           rm -rf pages
           mkdir -p pages
           
-          # 2. Map microchess.html directly to index.html so it loads on the root domain
+          # 2. Map microchess.html directly to index.html for root domain hosting
           cp microchess/microchess.html pages/index.html
-          cp -r microchess/dist/* pages/
+          
+          # 3. Preserve the exact 'dist/' folder relative structure so the HTML script tags don't 404
+          cp -r microchess/dist pages/
           
           echo "=== Staged pages/ directory verification layout ==="
           ls -la pages
+          ls -la pages/dist
 
       # Step 8: Deliver static assets straight to the live web domain
       - name: Setup GitHub Pages hosting configuration
