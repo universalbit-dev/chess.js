@@ -6,14 +6,19 @@ import { Chessboard } from "https://cdn.jsdelivr.net/npm/cm-chessboard@4/src/cm-
 let telemetryTicks = 0;
 let lastRenderedSeed = null;
 
-// Determine endpoint location dynamically based on the active hosting environment
+// Environment Detection Matrix
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-// ROUTING ROUTINE: Talk to the Express engine locally, or fall back to the static 
-// randomchess.json flat file hosted seamlessly right beside index.html on GitHub Pages.
+// CLOUD RELAY ROUTING DEFINITIONS
+// Since Webpack bakes these string tokens cleanly during compilation,
+// we fall back to a safe placeholder structure if they are not explicitly injected.
+const COMPLED_BIN_ID = process.env.JSONBIN_BIN_ID || '';
+const COMPLED_ACCESS_KEY = process.env.JSONBIN_ACCESS_KEY || '';
+
+// UNIFIED API ENDPOINT RESOLUTION
 const API_ENDPOINT = isLocal 
-  ? '/api/live-game' 
-  : './randomchess.json';
+  ? '/api/live-game' // Connects directly to local memory cache[cite: 12]
+  : `https://api.jsonbin.io/v3/b/${COMPLED_BIN_ID}/latest`; // Live cloud transport line
 
 // Initialize cm-chessboard targeting your layout anchor
 const board = new Chessboard(document.getElementById("live-board"), {
@@ -118,27 +123,34 @@ function updateDashboardDomElements(gameData) {
 // ═══════════════════════════════════════════════════════════════════════════
 async function checkEngineUpdateCycle() {
   try {
-    const response = await fetch(API_ENDPOINT);
+    const headers = {};
+    
+    // Assign authorization values only when processing remote cloud transport links
+    if (!isLocal && COMPLED_ACCESS_KEY) {
+      headers['X-Access-Key'] = COMPLED_ACCESS_KEY;
+    }
+
+    const response = await fetch(API_ENDPOINT, { headers });
     if (!response.ok) return;
 
     const rawData = await response.json();
     if (!rawData) return;
 
-    // DATA UNPACKING HARMONIZATION:
-    // If it's an array log (GitHub Pages static host), parse the newest index entry.
-    // If it's a single raw JSON response profile (Local Express), load it immediately.
+    // DATA LAYOUT STRUCTURAL HARMONIZATION:
+    // If pulling from local Express cache or direct raw state blocks, assign directly.
+    // If pulling from JSONBin, map through the container's root .record array index.
     let targetRecord = null;
-    if (Array.isArray(rawData)) {
-      targetRecord = rawData[rawData.length - 1]; // Pull latest frame from log array[cite: 2]
-    } else if (rawData.record && Array.isArray(rawData.record)) {
-      targetRecord = rawData.record[rawData.record.length - 1]; // JSONBin fallback structure map
+    if (rawData.record) {
+      const recordPayload = rawData.record;
+      targetRecord = Array.isArray(recordPayload) ? recordPayload[recordPayload.length - 1] : recordPayload;
+    } else if (Array.isArray(rawData)) {
+      targetRecord = rawData[rawData.length - 1];
     } else {
       targetRecord = rawData;
     }
 
     if (!targetRecord || !targetRecord.final_fen) return;
 
-    // Check seed boundaries to prevent repetitive canvas repaint cycles
     if (targetRecord.seed !== lastRenderedSeed) {
       lastRenderedSeed = targetRecord.seed;
       
