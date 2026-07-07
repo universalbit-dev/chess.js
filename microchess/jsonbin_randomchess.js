@@ -2,12 +2,9 @@
  * jsonbin_randomchess.js
  *
  * Scheduled uploader for filtered chess log JSON to jsonbin.io
- * Enhanced with quiet environment logging and dynamic directory resolution paths.
- *
  * Author: universalbit-dev
  */
 
-// Pass quiet: true to completely suppress the console injection logs and tips
 require('dotenv').config({ quiet: true });
 
 const fs = require('fs-extra');
@@ -15,13 +12,13 @@ const path = require('path');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ─── DYNAMIC DIRECTORY RESOLUTION LAYER
+// ─── CONFIGURATION & ROUTING ENVIRONMENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-const INTERVAL = parseInt(process.env.MICROCHESS_UPLOAD_INTERVAL, 10) || 3600000; 
+const INTERVAL = parseInt(process.env.MICROCHESS_UPLOAD_INTERVAL, 10) || 60000; // Check interval (e.g., 1 min)
 const ACCESS_KEY = process.env.JSONBIN_ACCESS_KEY;
+const BIN_ID = process.env.JSONBIN_BIN_ID; // Your static collection ID
 
-// Force path evaluation to bind strictly to execution context folder dynamically
 const RANDOMCHESS_PATH = process.env.RANDOMCHESS_PATH
   ? path.resolve(process.env.RANDOMCHESS_PATH)
   : path.resolve(__dirname, 'randomchess.json');
@@ -31,62 +28,71 @@ const METADATA_PATH = process.env.METADATA_PATH
   : path.resolve(__dirname, 'metadata.json');
 
 if (!ACCESS_KEY || ACCESS_KEY.trim() === '') {
-  console.error(`[${new Date().toISOString()}] Error: JSONBIN_ACCESS_KEY is not set in .env.`);
+  console.error(`[${new Date().toISOString()}] Error: JSONBIN_ACCESS_KEY is not set.`);
   process.exit(1);
 }
 
+let lastProcessedTimestamp = null;
+
 // ═══════════════════════════════════════════════════════════════════════════
-// ─── CORE UPLOADER ENGINE
+// ─── CORE STORAGE SYNC TASK
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function uploadRandomChess() {
+async function syncLogsToCloud() {
   try {
-    if (!fs.existsSync(RANDOMCHESS_PATH)) {
-      console.error(`[${new Date().toISOString()}] Target sync matrix missed. File not found at: ${RANDOMCHESS_PATH}`);
-      return;
-    }
-    
-    const raw = await fs.readFile(RANDOMCHESS_PATH, 'utf8');
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch (e) {
-      console.error(`[${new Date().toISOString()}] Invalid JSON formatting signature found in: ${RANDOMCHESS_PATH}`);
-      return;
-    }
-    
-    if (!Array.isArray(data)) {
-      console.error(`[${new Date().toISOString()}] File compilation structural error: Top-level data is not an array.`);
-      return;
+    if (!(await fs.pathExists(RANDOMCHESS_PATH))) return;
+
+    const data = await fs.readJson(RANDOMCHESS_PATH);
+    if (!Array.isArray(data) || data.length === 0) return;
+
+    // Grab the latest entry to evaluate if updates are necessary
+    const latestGame = data[data.length - 1];
+    if (latestGame.timestamp === lastProcessedTimestamp) {
+      return; // No new game has been generated since the last check
     }
 
-    // --- DEDUPLICATION PROCESSING LOOP ---
+    // --- DEDUPLICATION LOOP ---
     const seen = new Set();
     const deduped = data.filter(game => {
-      if (!game.fen) return true; 
-      if (seen.has(game.fen)) return false;
-      seen.add(game.fen);
+      if (!game.final_fen) return true;
+      if (seen.has(game.final_fen)) return false;
+      seen.add(game.final_fen);
       return true;
     });
 
-    // --- OUTBOUND SYNC PIPELINE ---
-    const response = await fetch('https://api.jsonbin.io/v3/b', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Access-Key': ACCESS_KEY,
-        'X-Bin-Private': 'true'
-      },
+    // --- DETERMINISTIC ENDPOINT RESOLUTION ---
+    let url = 'https://api.jsonbin.io/v3/b';
+    let httpMethod = 'POST';
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Access-Key': ACCESS_KEY
+    };
+
+    // If your static BIN_ID exists, convert the stream route to update (PUT) mode
+    if (BIN_ID && BIN_ID.trim() !== '') {
+      url = `https://api.jsonbin.io/v3/b/${BIN_ID.trim()}`;
+      httpMethod = 'PUT';
+    } else {
+      headers['X-Bin-Private'] = 'true';
+    }
+
+    console.log(`[${new Date().toISOString()}] Syncing logs to cloud endpoint using ${httpMethod}...`);
+
+    const response = await fetch(url, {
+      method: httpMethod,
+      headers: headers,
       body: JSON.stringify(deduped)
     });
 
     const json = await response.json();
 
-    if (json && json.record) {
+    // Verify response validation constraints
+    if (json && (json.record || json.data)) {
+      lastProcessedTimestamp = latestGame.timestamp;
       await fs.writeJson(METADATA_PATH, json, { spaces: 2 });
-      console.log(`[${new Date().toISOString()}] Cloud sync successful. Meta records compiled into: ${METADATA_PATH}`);
+      console.log(`[${new Date().toISOString()}] Persistent cloud sync successful. Method: ${httpMethod}.`);
     } else {
-      console.error(`[${new Date().toISOString()}] Cloud storage drop warning:`, json);
+      console.error(`[${new Date().toISOString()}] Cloud storage write warning:`, json);
     }
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Critical transport layer error:`, error);
@@ -97,6 +103,6 @@ async function uploadRandomChess() {
 // ─── RUNTIME INITIATION
 // ═══════════════════════════════════════════════════════════════════════════
 
-console.log(`Uploader engine initialized. Target frequency configuration: every ${INTERVAL / 1000}s.`);
-uploadRandomChess(); // Direct immediate sync test on process spin-up
-setInterval(uploadRandomChess, INTERVAL);
+console.log(`[${new Date().toISOString()}] Cloud uploader initialized. Target Bin ID: ${BIN_ID || 'New Container (POST)'}`);
+setInterval(syncLogsToCloud, INTERVAL);
+syncLogsToCloud();
