@@ -19,7 +19,6 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    # Point this job directly to your custom microchess environment profile
     environment:
       name: microchess
       url: ${{ steps.deployment.outputs.page_url }}
@@ -34,31 +33,32 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      # Step 1: Install parent repository dependencies so peggy/typescript are available
       - name: Install parent repository dependencies
         run: |
           npm ci --no-audit --no-fund
 
-      # Step 2: Install microchess dependencies
       - name: Install microchess dependencies
         run: |
           cd microchess
           npm ci --install-links=false --no-audit --no-fund
 
-      # Step 3: Compile production assets via Webpack, passing your custom Environment secrets
+      # Step 3: Compile production assets via Webpack with explicit Environment Mappings
       - name: Compile production assets via Webpack
         env:
-          JSONBIN_API_KEY: ${{ secrets.JSONBIN_KEY }}
-          JSONBIN_BIN_ID: ${{ secrets.JSONBIN_BIN_ID }}  # <-- Securely hooks up your Bin ID for Webpack bundling!
+          NODE_ENV: production
+          JSONBIN_ACCESS_KEY: ${{ secrets.JSONBIN_KEY }}     # <-- MAPS SECRETS TO WEBPACK VARIABLES
+          JSONBIN_BIN_ID: ${{ secrets.JSONBIN_BIN_ID }}       # <-- MAPS SECRETS TO WEBPACK VARIABLES
         run: |
           cd microchess
           npm run build
 
-      # Step 4: Install PM2 globally for CI Smoke Testing
+      - name: Seed local base state file for CI server verification
+        run: |
+          echo '[{"process":"microchess-nn","message":"Initial state payload","status":"generated","timestamp":"2026-07-06T22:00:00.000Z","move_count":0,"result":"*","reason":"","final_fen":"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1","pgn":"","rng":"mulberry32","rng_version":null,"seed":"0000000000000000"}]' > microchess/randomchess.json
+
       - name: Install PM2 globally
         run: npm install -g pm2
 
-      # Step 5: Start app with PM2 (For CI validation testing only)
       - name: Start app with PM2 (CI Verification Pass)
         run: |
           cd microchess
@@ -68,36 +68,40 @@ jobs:
             echo "No PM2 config found, skipping runtime test."
           fi
 
-      # Step 6: Log PM2 process matrix status to build logs
       - name: List PM2 processes (Build Logs Audit)
         run: pm2 list
 
-      # Step 7: Stage distribution build artifacts into a clean deployment workspace
       - name: Stage distribution build artifacts in pages directory
         run: |
-          # 1. Clean workspace completely to remove default markdown page structures
           rm -rf pages
           mkdir -p pages
           
-          # 2. Map microchess.html directly to index.html for root domain hosting
+          # Map microchess.html directly to index.html for root web access
           cp microchess/microchess.html pages/index.html
           
-          # 3. Preserve the exact 'dist/' folder relative structure so the HTML script tags don't 404
+          # Copy the compiled bundle distribution folder assets
           cp -r microchess/dist pages/
+
+          # Copy your baseline snapshot database file
+          cp microchess/randomchess.json pages/randomchess.json
           
           echo "=== Staged pages/ directory verification layout ==="
           ls -la pages
           ls -la pages/dist
 
-      # Step 8: Deliver static assets straight to the live web domain
       - name: Setup GitHub Pages hosting configuration
         uses: actions/configure-pages@v5
 
+      # Explicit namespacing constraints prevent multiple artifact collision races
       - name: Upload compiled website deployment archive
         uses: actions/upload-pages-artifact@v3
         with:
+          name: github-pages
           path: './pages'
+          retention-days: 1
 
       - name: Deploy active assets to GitHub Pages live domain
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages
