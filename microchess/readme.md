@@ -1,3 +1,6 @@
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/universalbit-dev/chess.js/microchess-pages.yml?branch=microchess&style=flat-square&label=CI%20Pipeline&logo=github)](https://github.com/universalbit-dev/chess.js/actions)
+[![Node.js Version](https://img.shields.io/badge/node-v22.17.1-green?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
+[![PM2 Process Manager](https://img.shields.io/badge/pm2-v6.0.8%20%2F%20v7.0.1-blueviolet?style=flat-square&logo=pm2&logoColor=white)](https://pm2.keymetrics.io)
 ## ⚡️ Preparing chess.js for microchess
 
 > **🛠️ Before you run microchess, make sure the main chess.js library is installed!**
@@ -55,11 +58,10 @@ cd chess.js/microchess
 ---
 
 ### 2. 📦 Install Dependencies
-
+[![Node.js Version](https://img.shields.io/badge/node-v22.17.1-green?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 ```bash
 npm install && npm i pm2 -g
 ```
-> **Tested Node.js version:** v20  
 
 ---
 
@@ -72,7 +74,7 @@ MICROCHESS_GENERATOR_INTERVAL=450000
 MICROCHESS_UPLOAD_INTERVAL=3600000
 # Your jsonbin.io API Access Key
 JSONBIN_ACCESS_KEY= <== JSONBIN API Access-Key
-
+JSONBIN_BIN_ID=     <== JSONBIN_ID
 RANDOMCHESS_PATH=./randomchess.json
 METADATA_PATH=./metadata.json
 ```
