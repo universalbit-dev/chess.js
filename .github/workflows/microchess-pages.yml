@@ -42,15 +42,20 @@ jobs:
           cd microchess
           npm ci --install-links=false --no-audit --no-fund
 
-      # Step 3: Compile production assets via Webpack with explicit Environment Mappings
+      # Webpack compiles and bakes the secrets in right here safely
       - name: Compile production assets via Webpack
         env:
           NODE_ENV: production
-          JSONBIN_ACCESS_KEY: ${{ secrets.JSONBIN_KEY }}     # <-- MAPS SECRETS TO WEBPACK VARIABLES
-          JSONBIN_BIN_ID: ${{ secrets.JSONBIN_BIN_ID }}       # <-- MAPS SECRETS TO WEBPACK VARIABLES
+          JSONBIN_ACCESS_KEY: ${{ secrets.JSONBIN_ACCESS_KEY }}
+          JSONBIN_BIN_ID: ${{ secrets.JSONBIN_BIN_ID }}
         run: |
           cd microchess
           npm run build
+
+      - name: Verify Webpack production assets generation
+        run: |
+          echo "=== Auditing microchess/dist directory structure ==="
+          ls -la microchess/dist/
 
       - name: Seed local base state file for CI server verification
         run: |
@@ -71,28 +76,34 @@ jobs:
       - name: List PM2 processes (Build Logs Audit)
         run: pm2 list
 
+      # This mimics your exact local workspace configuration layout on GitHub Pages
       - name: Stage distribution build artifacts in pages directory
         run: |
           rm -rf pages
           mkdir -p pages
           
-          # Map microchess.html directly to index.html for root web access
+          # 1. Maps your HTML landing file to root index.html
           cp microchess/microchess.html pages/index.html
           
-          # Copy the compiled bundle distribution folder assets
-          cp -r microchess/dist pages/
+          # 2. Re-creates dist/ structure containing the compiled bundle.js
+          mkdir -p pages/dist
+          cp -r microchess/dist/* pages/dist/
+          
+          # 3. Re-creates js/ folder structure for asset paths
+          mkdir -p pages/js
+          cp -r microchess/js/* pages/js/ || echo "No source folder found"
 
-          # Copy your baseline snapshot database file
+          # 4. Fallback database json positioning
           cp microchess/randomchess.json pages/randomchess.json
           
-          echo "=== Staged pages/ directory verification layout ==="
+          echo "=== Staged pages/ layout verification ==="
           ls -la pages
-          ls -la pages/dist
+          echo "=== Staged pages/dist/ payload verification ==="
+          ls -la pages/dist/
 
       - name: Setup GitHub Pages hosting configuration
         uses: actions/configure-pages@v5
 
-      # Explicit namespacing constraints prevent multiple artifact collision races
       - name: Upload compiled website deployment archive
         uses: actions/upload-pages-artifact@v3
         with:
