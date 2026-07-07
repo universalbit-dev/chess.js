@@ -9,7 +9,7 @@ module.exports = {
     },
     {
       name: 'microchess-generator',
-      script: './microchess_generator.js', // Or your actual game generator file name
+      script: './microchess.js', // Or your actual game generator file name
       env: {
         NODE_ENV: 'production'
       }
