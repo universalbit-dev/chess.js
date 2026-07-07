@@ -1,8 +1,8 @@
 /**
- * microchess.js (Production Infinite Daemon Loop - Anti-Lockup Version)
+ * microchess.js (Production 1-Hour Interval Daemon Engine)
  *
- * Generates continuous neural-network chess matches back-to-back.
- * Uses high-efficiency array-slice trimming to eliminate disk I/O bottlenecks.
+ * Runs a deep evaluation chess simulation once every 1 hour.
+ * Employs instant array-slicing to eliminate disk I/O deadlocks completely.
  */
 const path = require('path');
 require('dotenv').config();
@@ -18,18 +18,20 @@ const { Chess } = require('../dist/cjs/chess.js');
 
 const convnetjs = require('./core/convnet.js');
 
-//
-// Configuration Matrix Mappings
-//
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── CONFIGURATION & MATRIX PATH MAPPINGS
+// ═══════════════════════════════════════════════════════════════════════════
 const OUTPUT_FILE = process.env.MICROCHESS_OUTPUT_FILE
   ? path.resolve(process.env.MICROCHESS_OUTPUT_FILE)
   : path.join(__dirname, 'randomchess.json');
 
 const LOG_FILE = path.join(__dirname, 'microchess.log');
 
-const MAX_HISTORY_GAMES = 30; // KEEP EXACTLY 30 GAMES. Removes heavy byte size loops!
-const MAX_MOVES = 60;        // Keeps matches fast, tactical, and dynamic
+const MAX_HISTORY_GAMES = 30; // Hard boundary: keeps exactly the last 30 games
+const MAX_MOVES = 60;         // Quick, tactical games to prevent 100-move draw stalls
+const GENERATOR_INTERVAL = parseInt(process.env.MICROCHESS_GENERATOR_INTERVAL, 10) || 3600000; // 1 Hour
 
+// Setup Logger Pipeline
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -42,7 +44,9 @@ const logger = winston.createLogger({
   ],
 });
 
-// ConvNetJS Network Layer Setup
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── NEURAL NETWORK MATRIX SETUP (CONVNETJS)
+// ═══════════════════════════════════════════════════════════════════════════
 const netLayerDefs = [];
 netLayerDefs.push({ type: 'input', out_sx: 1, out_sy: 1, out_depth: 64 });
 netLayerDefs.push({ type: 'fc', num_neurons: 32, activation: 'relu' });
@@ -57,6 +61,9 @@ const networkTrainer = new convnetjs.Trainer(neuralEvaluator, {
   batch_size: 1
 });
 
+/**
+ * Transforms an 8x8 matrix grid layout into standard convolutional float vectors
+ */
 function boardToVolumeInput(board) {
   const inputSequence = new Array(64).fill(0);
   const numericWeights = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 10 };
@@ -76,6 +83,9 @@ function boardToVolumeInput(board) {
   return vol;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── ATOMIC DISK STORAGE OPERATIONS
+// ═══════════════════════════════════════════════════════════════════════════
 async function atomicWriteJson(filePath, data) {
   const tmpPath = `${filePath}.${Date.now()}.${process.pid}.tmp`;
   await writeFile(tmpPath, JSON.stringify(data, null, 2) + os.EOL, 'utf8');
@@ -95,6 +105,9 @@ async function loadLogs() {
   return [];
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── CORE ENGINE COMPUTATION THREAD PASS
+// ═══════════════════════════════════════════════════════════════════════════
 async function runOnce() {
   const seed = crypto.randomBytes(8).toString('hex');
   const chess = new Chess();
@@ -147,10 +160,11 @@ async function runOnce() {
   else if (chess.isStalemate()) { reason = 'Stalemate'; }
   else if (chess.isDraw()) { reason = 'Draw'; }
 
-  const pgnHeaders = `[Event "ConvNetJS Continuous Daemon Iteration"]\n[Result "${result}"]\n[Reason "${reason}"]\n[PlyCount "${moves.length}"]`;
+  const pgnHeaders = `[Event "ConvNetJS Periodic Engine Pass"]\n[Result "${result}"]\n[Reason "${reason}"]\n[PlyCount "${moves.length}"]`;
   const pgn = `${pgnHeaders}\n\n${pgnMoves} ${result}`;
   const meanLossMetric = (calculationSteps > 0 && !isNaN(totalGameLoss)) ? (totalGameLoss / calculationSteps) : 0.015;
 
+  // Structural type-safeties for Webpack frontend chart rendering guarantees
   const targetGameRecord = {
     process: 'microchess-nn',
     timestamp: new Date().toISOString(),
@@ -165,32 +179,34 @@ async function runOnce() {
     loss_metric: isNaN(meanLossMetric) ? 0.015000 : parseFloat(meanLossMetric.toFixed(6))
   };
 
-  // ⚡ HIGH-EFFICIENCY LOG OVERWRITE PIPELINE
+  // Low-overhead storage append & slide window slice trim
   let currentLogsArray = await loadLogs();
   currentLogsArray.push(targetGameRecord);
   
-  // Instant sliding window trim down to maximum history size
   if (currentLogsArray.length > MAX_HISTORY_GAMES) {
     currentLogsArray = currentLogsArray.slice(-MAX_HISTORY_GAMES);
   }
 
   await atomicWriteJson(OUTPUT_FILE, currentLogsArray);
-  logger.info(`Neural chess game completed and updated database. (seed=${seed}, result=${result}, moves=${moves.length})`);
+  logger.info(`Periodic chess game completed and synced. (seed=${seed}, result=${result}, moves=${moves.length})`);
 }
 
-//
-// SYSTEM INCEPTION (INFINITE PERSISTENT DAEMON WORKER LOOP)
-//
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── RUNTIME BACKGROUND DEAMON CONTROL INTERVAL
+// ═══════════════════════════════════════════════════════════════════════════
 (async function startup() {
-  logger.info('Continuous infinite processing loop initialized.');
+  logger.info(`Microchess daemon fully active. Scheduled execution frequency interval: ${GENERATOR_INTERVAL / 60000} minutes.`);
+  
   while (true) {
     try {
       await runOnce();
-      // 3-second cooling gap to guarantee the file handles completely release
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      
+      logger.info(`Sleeping for ${GENERATOR_INTERVAL / 3600000} hour before triggering next iteration calculation pass...`);
+      // Controlled sleep window to drop thread CPU utilization straight to 0%
+      await new Promise((resolve) => setTimeout(resolve, GENERATOR_INTERVAL));
     } catch (err) {
-      logger.error(`Loop pass encountered error: ${err.message}`);
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      logger.error(`Error encountered in calculation loop frame: ${err.message}`);
+      await new Promise((resolve) => setTimeout(resolve, 10000)); // Hold 10 seconds on fail
     }
   }
 })();
