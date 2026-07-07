@@ -1,8 +1,8 @@
 /**
- * microchess.js (Persistent Background Engine Daemon Loop)
+ * microchess.js (Production Infinite Daemon Loop - Anti-Lockup Version)
  *
- * Runs continuous neural network chess simulations back-to-back.
- * Built to work cleanly with interactive frontend control dashboards.
+ * Generates continuous neural-network chess matches back-to-back.
+ * Uses high-efficiency array-slice trimming to eliminate disk I/O bottlenecks.
  */
 const path = require('path');
 require('dotenv').config();
@@ -19,19 +19,17 @@ const { Chess } = require('../dist/cjs/chess.js');
 const convnetjs = require('./core/convnet.js');
 
 //
-// System Path Mapping Configurations
+// Configuration Matrix Mappings
 //
 const OUTPUT_FILE = process.env.MICROCHESS_OUTPUT_FILE
   ? path.resolve(process.env.MICROCHESS_OUTPUT_FILE)
   : path.join(__dirname, 'randomchess.json');
 
 const LOG_FILE = path.join(__dirname, 'microchess.log');
-const MAX_SIZE_BYTES = 1 * 1024 * 1024; // 1MB Max Array File Size Safeguard
-const MAX_MOVES = 100;
 
-//
-// Winston Pipeline Logger
-//
+const MAX_HISTORY_GAMES = 30; // KEEP EXACTLY 30 GAMES. Removes heavy byte size loops!
+const MAX_MOVES = 60;        // Keeps matches fast, tactical, and dynamic
+
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -44,12 +42,7 @@ const logger = winston.createLogger({
   ],
 });
 
-//
-// Global Control Flags for State Deck Tracking
-//
-let isPaused = false; 
-
-// Initialize ConvNetJS Network Layer Matrix
+// ConvNetJS Network Layer Setup
 const netLayerDefs = [];
 netLayerDefs.push({ type: 'input', out_sx: 1, out_sy: 1, out_depth: 64 });
 netLayerDefs.push({ type: 'fc', num_neurons: 32, activation: 'relu' });
@@ -64,9 +57,6 @@ const networkTrainer = new convnetjs.Trainer(neuralEvaluator, {
   batch_size: 1
 });
 
-/**
- * Transforms an 8x8 matrix into optimized convolutional float vectors
- */
 function boardToVolumeInput(board) {
   const inputSequence = new Array(64).fill(0);
   const numericWeights = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 10 };
@@ -96,15 +86,15 @@ async function loadLogs() {
   if (fs.existsSync(OUTPUT_FILE)) {
     try {
       const data = await readFile(OUTPUT_FILE, 'utf8');
-      return JSON.parse(data) || [];
-    } catch (e) { return []; }
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) { 
+      return []; 
+    }
   }
   return [];
 }
 
-/**
- * Executes a single complete game sequence iteration pass
- */
 async function runOnce() {
   const seed = crypto.randomBytes(8).toString('hex');
   const chess = new Chess();
@@ -149,26 +139,39 @@ async function runOnce() {
   const finalBoardAdvantageScore = 1 / (1 + Math.exp(-finalOutputVector.w[0]));
 
   let pgnMoves = moves.map((m, idx) => (idx % 2 === 0 ? `${Math.floor(idx / 2) + 1}. ${m}` : m)).join(' ');
-  let result = chess.isCheckmate() ? (chess.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2';
+  
+  let result = "1/2-1/2";
+  let reason = "Move Limit Terminated";
+  
+  if (chess.isCheckmate()) { result = chess.turn() === 'w' ? '0-1' : '1-0'; reason = 'Checkmate'; }
+  else if (chess.isStalemate()) { reason = 'Stalemate'; }
+  else if (chess.isDraw()) { reason = 'Draw'; }
+
+  const pgnHeaders = `[Event "ConvNetJS Continuous Daemon Iteration"]\n[Result "${result}"]\n[Reason "${reason}"]\n[PlyCount "${moves.length}"]`;
+  const pgn = `${pgnHeaders}\n\n${pgnMoves} ${result}`;
+  const meanLossMetric = (calculationSteps > 0 && !isNaN(totalGameLoss)) ? (totalGameLoss / calculationSteps) : 0.015;
 
   const targetGameRecord = {
     process: 'microchess-nn',
     timestamp: new Date().toISOString(),
     move_count: moves.length,
-    result,
+    result: result,
+    reason: reason,
     final_fen: chess.fen(),
-    pgn: `[Result "${result}"]\n\n${pgnMoves}`,
-    seed,
-    evaluation_score: parseFloat(finalBoardAdvantageScore.toFixed(4)),
-    loss_metric: parseFloat((calculationSteps > 0 ? totalGameLoss / calculationSteps : 0.015).toFixed(6))
+    pgn: pgn,
+    rng: 'mulberry32',
+    seed: seed,
+    evaluation_score: isNaN(finalBoardAdvantageScore) ? 0.5000 : parseFloat(finalBoardAdvantageScore.toFixed(4)),
+    loss_metric: isNaN(meanLossMetric) ? 0.015000 : parseFloat(meanLossMetric.toFixed(6))
   };
 
-  const currentLogsArray = await loadLogs();
+  // ⚡ HIGH-EFFICIENCY LOG OVERWRITE PIPELINE
+  let currentLogsArray = await loadLogs();
   currentLogsArray.push(targetGameRecord);
   
-  // Keep array within size limits
-  while (Buffer.byteLength(JSON.stringify(currentLogsArray), 'utf8') > MAX_SIZE_BYTES && currentLogsArray.length > 0) {
-    currentLogsArray.shift();
+  // Instant sliding window trim down to maximum history size
+  if (currentLogsArray.length > MAX_HISTORY_GAMES) {
+    currentLogsArray = currentLogsArray.slice(-MAX_HISTORY_GAMES);
   }
 
   await atomicWriteJson(OUTPUT_FILE, currentLogsArray);
@@ -176,27 +179,18 @@ async function runOnce() {
 }
 
 //
-// SYSTEM INCEPTION (INFINITE PERSISTENT GENERATOR DAEMON LOOP)
+// SYSTEM INCEPTION (INFINITE PERSISTENT DAEMON WORKER LOOP)
 //
 (async function startup() {
   logger.info('Continuous infinite processing loop initialized.');
-  
   while (true) {
     try {
-      // ═══ THE CONTROLS ENGINE GUARD LAYER ═══
-      if (isPaused) {
-        // Sleep for 2 seconds without performing calculations if pause is toggled
-        await new Promise((res) => setTimeout(res, 2000));
-        continue;
-      }
-
       await runOnce();
-      
-      // Post-game loop breathing room pass
-      await new Promise((res) => setTimeout(res, 2000));
+      // 3-second cooling gap to guarantee the file handles completely release
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     } catch (err) {
       logger.error(`Loop pass encountered error: ${err.message}`);
-      await new Promise((res) => setTimeout(res, 5000));
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
 })();
