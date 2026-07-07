@@ -8,14 +8,12 @@ let lastRenderedSeed = null;
 let lossChart = null;
 let isStreamTrackingActive = true; 
 
-// Initialize cm-chessboard targeting your layout anchor
 const board = new Chessboard(document.getElementById("live-board"), {
   position: "start",
   orientation: "black", 
   sprite: { url: "https://cdn.jsdelivr.net/npm/cm-chessboard@4/assets/images/chessboard-sprite.svg" }
 });
 
-// Initialize Chart.js configuration for Dual-Axis Telemetry
 const ctxLoss = document.getElementById('lossChart').getContext('2d');
 lossChart = new Chart(ctxLoss, {
   type: 'line',
@@ -190,17 +188,17 @@ function appendLiveChartPoint(evaluationScore, lossMetric) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ─── ENGINE SYNCHRONIZATION RUNNER (CORRECT INJECTION KEY MATCHES)
+// ─── ENGINE SYNCHRONIZATION RUNNER (DECOUPLED CLOUD PIPELINE)
 // ═══════════════════════════════════════════════════════════════════════════
 async function checkEngineUpdateCycle() {
   if (!isStreamTrackingActive) return;
 
-  // Pulls directly from your exact webpack configuration variables
+  // Webpack safely prints string literals here over these expressions on run build
   const BIN_ID = process.env.JSONBIN_BIN_ID;
   const ACCESS_KEY = process.env.JSONBIN_ACCESS_KEY;
 
   if (!BIN_ID || !ACCESS_KEY) {
-    console.warn("[Dashboard Sync] Waiting for environment variables to bundle...");
+    console.warn("[Dashboard Sync] Environment variables missing from compilation bundle.");
     return;
   }
 
@@ -231,7 +229,7 @@ async function checkEngineUpdateCycle() {
       await board.setPosition(dataPayload.final_fen, true);
     }
   } catch (err) {
-    console.warn("[GitHub Pages Monitor] Cloud fetch error: ", err.message);
+    console.warn("[GitHub Pages Monitor] Cloud fetch exception: ", err.message);
   }
 }
 
@@ -290,5 +288,5 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   checkEngineUpdateCycle();
-  setInterval(checkEngineUpdateCycle, 5000);
+  setInterval(checkEngineUpdateCycle, 5000); 
 });
