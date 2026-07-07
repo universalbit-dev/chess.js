@@ -60,7 +60,7 @@ cd chess.js/microchess
 ### 2. 📦 Install Dependencies
 [![Node.js Version](https://img.shields.io/badge/node-v22.17.1-green?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 ```bash
-npm install && npm i pm2 -g
+npm i && npm run build
 ```
 
 ---
