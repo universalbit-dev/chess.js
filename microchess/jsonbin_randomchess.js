@@ -1,8 +1,8 @@
 /**
- * jsonbin_randomchess.js
+ * jsonbin_randomchess.js (Synchronizer)
  *
- * Scheduled uploader for filtered chess log JSON to jsonbin.io
- * Author: universalbit-dev
+ * Captures the persistent history array of your neural engine
+ * and mirrors it safely to JSONBin for dashboard delivery.
  */
 
 require('dotenv').config({ quiet: true });
@@ -14,10 +14,9 @@ const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch
 // ═══════════════════════════════════════════════════════════════════════════
 // ─── CONFIGURATION & ROUTING ENVIRONMENTS
 // ═══════════════════════════════════════════════════════════════════════════
-
-const INTERVAL = parseInt(process.env.MICROCHESS_UPLOAD_INTERVAL, 10) || 60000; // Check interval (e.g., 1 min)
+const INTERVAL = parseInt(process.env.MICROCHESS_UPLOAD_INTERVAL, 10) || 60000; // 1 min sync check
 const ACCESS_KEY = process.env.JSONBIN_ACCESS_KEY;
-const BIN_ID = process.env.JSONBIN_BIN_ID; // Your static collection ID
+const BIN_ID = process.env.JSONBIN_BIN_ID; // Mandatory: Extracted exclusively from environment configuration layers
 
 const RANDOMCHESS_PATH = process.env.RANDOMCHESS_PATH
   ? path.resolve(process.env.RANDOMCHESS_PATH)
@@ -27,54 +26,55 @@ const METADATA_PATH = process.env.METADATA_PATH
   ? path.resolve(process.env.METADATA_PATH)
   : path.resolve(__dirname, 'metadata.json');
 
+// Rigid validation boundaries on boot pass
 if (!ACCESS_KEY || ACCESS_KEY.trim() === '') {
-  console.error(`[${new Date().toISOString()}] Error: JSONBIN_ACCESS_KEY is not set.`);
+  console.error(`[${new Date().toISOString()}] Critical Error: JSONBIN_ACCESS_KEY is not configured inside .env or environments.`);
+  process.exit(1);
+}
+
+if (!BIN_ID || BIN_ID.trim() === '') {
+  console.error(`[${new Date().toISOString()}] Critical Error: JSONBIN_BIN_ID is not configured inside .env or environments.`);
   process.exit(1);
 }
 
 let lastProcessedTimestamp = null;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ─── CORE STORAGE SYNC TASK
-// ═══════════════════════════════════════════════════════════════════════════
+console.log(`[${new Date().toISOString()}] Cloud uploader initialized using environment variables.`);
 
-async function syncLogsToCloud() {
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── SYNC EXECUTION ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+async function syncTelemetryWithCloudBin() {
   try {
-    if (!(await fs.pathExists(RANDOMCHESS_PATH))) return;
-
-    const data = await fs.readJson(RANDOMCHESS_PATH);
-    if (!Array.isArray(data) || data.length === 0) return;
-
-    // Grab the latest entry to evaluate if updates are necessary
-    const latestGame = data[data.length - 1];
-    if (latestGame.timestamp === lastProcessedTimestamp) {
-      return; // No new game has been generated since the last check
+    if (!(await fs.pathExists(RANDOMCHESS_PATH))) {
+      return; // Await file creation by generator daemon
     }
 
-    // --- DEDUPLICATION LOOP ---
-    const seen = new Set();
-    const deduped = data.filter(game => {
-      if (!game.final_fen) return true;
-      if (seen.has(game.final_fen)) return false;
-      seen.add(game.final_fen);
-      return true;
-    });
+    const records = await fs.readJson(RANDOMCHESS_PATH);
+    if (!Array.isArray(records) || records.length === 0) {
+      return;
+    }
 
-    // --- DETERMINISTIC ENDPOINT RESOLUTION ---
-    let url = 'https://api.jsonbin.io/v3/b';
-    let httpMethod = 'POST';
+    const latestGame = records[records.length - 1];
+
+    // Only hit your API quota if a brand new neural game has actually been added
+    if (lastProcessedTimestamp && latestGame.timestamp === lastProcessedTimestamp) {
+      return; 
+    }
+
+    // ⚡ FIXED ARCHITECTURE: Send the clean 30-game history array 
+    // This keeps the file small while ensuring the dashboard never loads blank lines!
+    let deduped = Array.from(records);
+    if (deduped.length > 30) {
+      deduped = deduped.slice(-30);
+    }
+
+    const url = `https://api.jsonbin.io/v3/b/${BIN_ID.trim()}`;
+    const httpMethod = 'PUT';
     const headers = {
       'Content-Type': 'application/json',
-      'X-Access-Key': ACCESS_KEY
+      'X-Access-Key': ACCESS_KEY.trim()
     };
-
-    // If your static BIN_ID exists, convert the stream route to update (PUT) mode
-    if (BIN_ID && BIN_ID.trim() !== '') {
-      url = `https://api.jsonbin.io/v3/b/${BIN_ID.trim()}`;
-      httpMethod = 'PUT';
-    } else {
-      headers['X-Bin-Private'] = 'true';
-    }
 
     console.log(`[${new Date().toISOString()}] Syncing logs to cloud endpoint using ${httpMethod}...`);
 
@@ -86,7 +86,6 @@ async function syncLogsToCloud() {
 
     const json = await response.json();
 
-    // Verify response validation constraints
     if (json && (json.record || json.data)) {
       lastProcessedTimestamp = latestGame.timestamp;
       await fs.writeJson(METADATA_PATH, json, { spaces: 2 });
@@ -95,14 +94,10 @@ async function syncLogsToCloud() {
       console.error(`[${new Date().toISOString()}] Cloud storage write warning:`, json);
     }
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Critical transport layer error:`, error);
+    console.error(`[${new Date().toISOString()}] Critical transport layer error:`, error.message);
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ─── RUNTIME INITIATION
-// ═══════════════════════════════════════════════════════════════════════════
-
-console.log(`[${new Date().toISOString()}] Cloud uploader initialized. Target Bin ID: ${BIN_ID || 'New Container (POST)'}`);
-setInterval(syncLogsToCloud, INTERVAL);
-syncLogsToCloud();
+// Start continuous execution loop tracking
+syncTelemetryWithCloudBin();
+setInterval(syncTelemetryWithCloudBin, INTERVAL);
