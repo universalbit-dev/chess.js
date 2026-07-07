@@ -6,7 +6,7 @@ import { Chessboard } from "https://cdn.jsdelivr.net/npm/cm-chessboard@4/src/cm-
 let telemetryTicks = 0;
 let lastRenderedSeed = null;
 let lossChart = null;
-let isStreamTrackingActive = true; // Governs whether the browser maps incoming data
+let isStreamTrackingActive = true; 
 
 // Initialize cm-chessboard targeting your layout anchor
 const board = new Chessboard(document.getElementById("live-board"), {
@@ -15,7 +15,7 @@ const board = new Chessboard(document.getElementById("live-board"), {
   sprite: { url: "https://cdn.jsdelivr.net/npm/cm-chessboard@4/assets/images/chessboard-sprite.svg" }
 });
 
-// Initialize Chart.js configuration for Dual-Axis Telemetry (Win % + Loss)
+// Initialize Chart.js configuration for Dual-Axis Telemetry
 const ctxLoss = document.getElementById('lossChart').getContext('2d');
 lossChart = new Chart(ctxLoss, {
   type: 'line',
@@ -40,7 +40,7 @@ lossChart = new Chart(ctxLoss, {
         backgroundColor: 'transparent',
         yAxisID: 'yLoss',
         borderWidth: 1.5,
-        borderDash: [3, 3], // Dotted tracking curve layout
+        borderDash: [3, 3], 
         pointRadius: 0,
         tension: 0.35,
         fill: false
@@ -69,7 +69,7 @@ lossChart = new Chart(ctxLoss, {
       yLoss: {
         type: 'linear',
         position: 'right',
-        grid: { drawOnChartArea: false }, // Avoid layout gridline cluttering
+        grid: { drawOnChartArea: false }, 
         ticks: { color: '#ff1744', callback: (val) => val.toFixed(3) }
       }
     }
@@ -79,26 +79,19 @@ lossChart = new Chart(ctxLoss, {
 // ═══════════════════════════════════════════════════════════════════════════
 // ─── DATA RENDERING & BACKFILL IMPLEMENTATION (CRASH SHIELD FILTER)
 // ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Pre-populates the UI timeline with historical game history data on page refresh
- */
 function seedHistoricalTimelineData(historyArray) {
   if (!Array.isArray(historyArray) || historyArray.length === 0) return;
 
-  // Flush legacy memory points
   lossChart.data.labels = [];
   lossChart.data.datasets[0].data = [];
   lossChart.data.datasets[1].data = [];
   telemetryTicks = 0;
 
-  // Backfill timeline using up to the last 30 generated match sets
   const backfillSlice = historyArray.slice(-30);
   backfillSlice.forEach((record) => {
     if (!record) return;
     telemetryTicks++;
     
-    // Explicit sanitization fallbacks preventing any undefined property crashes
     const winScore = (record.evaluation_score !== undefined && record.evaluation_score !== null && !isNaN(record.evaluation_score))
       ? Number(record.evaluation_score)
       : 0.50;
@@ -114,7 +107,6 @@ function seedHistoricalTimelineData(historyArray) {
 
   lossChart.update();
 
-  // Populate primary viewport layout with the absolute latest entry block
   const currentActiveGame = historyArray[historyArray.length - 1];
   if (currentActiveGame) {
     updateDashboardDomElements(currentActiveGame);
@@ -131,7 +123,6 @@ function updateDashboardDomElements(targetRecord) {
   const rng = targetRecord.rng || "mulberry32";
   const fen = targetRecord.final_fen || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   
-  // High-Defense Guard Filter Step
   let displayLoss = "0.0000";
   if (targetRecord.loss_metric !== undefined && targetRecord.loss_metric !== null && !isNaN(targetRecord.loss_metric)) {
     displayLoss = Number(targetRecord.loss_metric).toFixed(4);
@@ -199,17 +190,31 @@ function appendLiveChartPoint(evaluationScore, lossMetric) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ─── ENGINE SYNCHRONIZATION RUNNER & WEBPACK INTERACTIVE EVENT LISTENERS
+// ─── ENGINE SYNCHRONIZATION RUNNER (CORRECT INJECTION KEY MATCHES)
 // ═══════════════════════════════════════════════════════════════════════════
 async function checkEngineUpdateCycle() {
-  // If user sets status to PAUSE, suspend tracking execution loops
   if (!isStreamTrackingActive) return;
 
-  try {
-    const response = await fetch('/api/live-game');
-    if (!response.ok) return;
+  // Pulls directly from your exact webpack configuration variables
+  const BIN_ID = process.env.JSONBIN_BIN_ID;
+  const ACCESS_KEY = process.env.JSONBIN_ACCESS_KEY;
 
-    const dataPayload = await response.json();
+  if (!BIN_ID || !ACCESS_KEY) {
+    console.warn("[Dashboard Sync] Waiting for environment variables to bundle...");
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+      method: 'GET',
+      headers: {
+        'X-Access-Key': ACCESS_KEY
+      }
+    });
+    
+    if (!response.ok) return;
+    const envelope = await response.json();
+    const dataPayload = envelope.record;
     if (!dataPayload) return;
 
     if (Array.isArray(dataPayload)) {
@@ -226,11 +231,11 @@ async function checkEngineUpdateCycle() {
       await board.setPosition(dataPayload.final_fen, true);
     }
   } catch (err) {
-    console.warn("[Dashboard Runtime Monitor] Polling update bypassed: ", err.message);
+    console.warn("[GitHub Pages Monitor] Cloud fetch error: ", err.message);
   }
 }
 
-// Global Core Bootstrap Bindings Selector Hook
+// Global Core Bootstrap Bindings
 document.addEventListener("DOMContentLoaded", () => {
   const startBtn = document.getElementById("btn-engine-start");
   const pauseBtn = document.getElementById("btn-engine-pause");
@@ -238,7 +243,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const statusLabel = document.getElementById("stream-control-status");
 
   if (startBtn && pauseBtn && resetBtn) {
-    // 🟢 START INTERACTION
     startBtn.addEventListener("click", () => {
       isStreamTrackingActive = true;
       if (statusLabel) {
@@ -249,7 +253,6 @@ document.addEventListener("DOMContentLoaded", () => {
       pauseBtn.classList.remove("active");
     });
 
-    // 🟡 PAUSE INTERACTION
     pauseBtn.addEventListener("click", () => {
       isStreamTrackingActive = false;
       if (statusLabel) {
@@ -260,7 +263,6 @@ document.addEventListener("DOMContentLoaded", () => {
       startBtn.classList.remove("active");
     });
 
-    // 🔴 RESET VIEW PIPELINE
     resetBtn.addEventListener("click", () => {
       if (!confirm("Are you sure you want to clear your local dashboard analytics history?")) return;
 
@@ -284,15 +286,9 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("game-result").innerText = "*";
       document.getElementById("avg-loss").innerText = "0.0000";
       board.setPosition("start", true);
-      
-      if (statusLabel) {
-        statusLabel.innerText = "Status: Cache flushed. Awaiting pipeline update...";
-        statusLabel.className = "small text-danger font-monospace";
-      }
     });
   }
 
-  // Fire polling mechanisms
   checkEngineUpdateCycle();
-  setInterval(checkEngineUpdateCycle, 3500); // Poll every 3.5 seconds
+  setInterval(checkEngineUpdateCycle, 5000);
 });
