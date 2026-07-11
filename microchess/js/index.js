@@ -6,12 +6,12 @@ import { Chessboard } from "https://cdn.jsdelivr.net/npm/cm-chessboard@4/src/cm-
 let telemetryTicks = 0;
 let lastRenderedSeed = null;
 let lossChart = null;
-let isStreamTrackingActive = true; 
+let isStreamTrackingActive = true;
 
 const board = new Chessboard(document.getElementById("live-board"), {
   position: "start",
-  orientation: "black", 
-  sprite: { url: "https://cdn.jsdelivr.net/npm/cm-chessboard@4/assets/images/chessboard-sprite.svg" }
+  orientation: "white", 
+  sprite: { url: "https://cdn.jsdelivr.net/npm/cm-chessboard@4/assets/images/chessboard-sprite-staunty.svg" } // Native alternative set
 });
 
 const ctxLoss = document.getElementById('lossChart').getContext('2d');
