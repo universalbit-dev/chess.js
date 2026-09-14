@@ -91,7 +91,7 @@
         <i class="bi bi-cpu-fill me-2 text-info animate-pulse"></i>
         <span>MicroChess <span class="text-info fw-semibold d-none d-sm-inline">Console</span></span>
       </span>
-      <div class="d-flex align-items: center gap-3">
+      <div class="d-flex align-items-center gap-3">
         <a rel="me" href="https://mastodon.social/@UniversalBit" target="_blank" aria-label="Mastodon Profile" style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #6364ff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); text-decoration: none; overflow: hidden; transition: transform 0.2s ease, background 0.2s ease;" onmouseover="this.style.background='#5253e0'; this.style.transform='scale(1.1)';" onmouseout="this.style.background='#6364ff'; this.style.transform='scale(1)';">
           <img src="https://cdn.jsdelivr.net/npm/social-media-icons@0.3.1/icons/mastodon.svg" alt="Mastodon" style="width: 20px; height: 20px; display: block; filter: invert(1) brightness(2);" />
         </a>
@@ -189,14 +189,16 @@
     </div>
   </div>
 
-  <footer class="text-center py-3">
+  <footer class="text-center py-4 d-flex justify-content-center align-items-center gap-3">
     <a
-      rel="me noopener noreferrer"
+      href="https://www.jsdelivr.com"
       target="_blank"
-      href="https://mastodon.social/@UniversalBit"
-      class="text-info"
+      aria-label="Powered by jsDelivr"
+      style="display: inline-flex; align-items: center; padding: 6px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; text-decoration: none; transition: background 0.2s ease;"
+      onmouseover="this.style.background='rgba(255,255,255,0.1)';"
+      onmouseout="this.style.background='rgba(255,255,255,0.05)';"
     >
-      Mastodon
+      <img src="https://cdn.jsdelivr.net/gh/jsdelivr/jsdelivr-media@master/default/svg/jsdelivr-logo-horizontal.svg" alt="jsDelivr CDN" style="height: 18px; width: auto; display: block;" />
     </a>
   </footer>
 
