@@ -7,7 +7,12 @@
   "module": "dist/esm/chess.js",
   "types": "dist/types/chess.d.ts",
   "homepage": "https://github.com/jhlywa/chess.js",
-  "keywords": ["chess", "fen", "pgn", "typescript"],
+  "keywords": [
+    "chess",
+    "fen",
+    "pgn",
+    "typescript"
+  ],
   "author": "Jeff Hlywa <jhlywa@gmail.com>",
   "scripts": {
     "prepare": "npm run build",
@@ -33,15 +38,15 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
-    "@microsoft/api-extractor": "^7.52.8",
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.29.0",
+    "@microsoft/api-extractor": "^7.52.8",
     "@rollup/plugin-commonjs": "^28.0.3",
     "@rollup/plugin-typescript": "^12.1.2",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^8.35.0",
     "@typescript-eslint/parser": "^8.35.0",
-    "@vitest/coverage-v8": "^3.2.2",
+    "@vitest/coverage-v8": "^5.0.1",
     "eslint": "^9.29.0",
     "peggy": "^4.2.0",
     "prettier": "^3.1.0",
@@ -51,6 +56,6 @@
     "tslib": "^2.8.1",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.2"
+    "vitest": "^5.0.1"
   }
 }
