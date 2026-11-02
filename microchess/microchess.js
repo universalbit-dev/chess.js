@@ -84,7 +84,7 @@ function boardToVolumeInput(board) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ─── ATOMIC DISK STORAGE OPERATIONS
+// ─── ATOMIC DISK & CLOUD STORAGE SYNCHRONIZATION
 // ═══════════════════════════════════════════════════════════════════════════
 async function atomicWriteJson(filePath, data) {
   const tmpPath = `${filePath}.${Date.now()}.${process.pid}.tmp`;
@@ -103,6 +103,40 @@ async function loadLogs() {
     }
   }
   return [];
+}
+
+/**
+ * Resilient JSONBin cloud synchronization with rate-limit/quota safeguards.
+ * Prevents daemon crashes if request limits (e.g. 100k quota) are reached.
+ */
+async function syncToJsonBin(data) {
+  const binId = process.env.JSONBIN_BIN_ID;
+  const accessKey = process.env.JSONBIN_ACCESS_KEY;
+  if (!binId || !accessKey) return;
+
+  try {
+    const url = `https://api.jsonbin.io/v3/b/${binId}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': accessKey
+      },
+      body: JSON.stringify(data)
+    });
+
+    if (!res.ok) {
+      if (res.status === 429 || res.status === 403) {
+        logger.warn(`JSONBin quota or rate limit reached (${res.status}). Cloud sync skipped; local fallback storage active.`);
+      } else {
+        logger.warn(`JSONBin sync returned non-OK status: ${res.status}`);
+      }
+    } else {
+      logger.info('Successfully synced game records to JSONBin cloud storage.');
+    }
+  } catch (err) {
+    logger.warn(`JSONBin network/sync error: ${err.message}. Local file storage remains fully operational.`);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -187,12 +221,17 @@ async function runOnce() {
     currentLogsArray = currentLogsArray.slice(-MAX_HISTORY_GAMES);
   }
 
+  // Save locally first (guarantees zero-deadlock persistence)
   await atomicWriteJson(OUTPUT_FILE, currentLogsArray);
-  logger.info(`Periodic chess game completed and synced. (seed=${seed}, result=${result}, moves=${moves.length})`);
+
+  // Attempt syncing to cloud storage (safe against quota/rate limit exhaustion)
+  await syncToJsonBin(currentLogsArray);
+
+  logger.info(`Periodic chess game completed and processed. (seed=${seed}, result=${result}, moves=${moves.length})`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ─── RUNTIME BACKGROUND DEAMON CONTROL INTERVAL
+// ─── RUNTIME BACKGROUND DAEMON CONTROL INTERVAL
 // ═══════════════════════════════════════════════════════════════════════════
 (async function startup() {
   logger.info(`Microchess daemon fully active. Scheduled execution frequency interval: ${GENERATOR_INTERVAL / 60000} minutes.`);
