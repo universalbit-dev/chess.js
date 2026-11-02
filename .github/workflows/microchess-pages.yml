@@ -80,26 +80,24 @@ jobs:
       - name: Stage distribution build artifacts in pages directory
         run: |
           rm -rf pages
-          mkdir -p pages
+          mkdir -p pages/microchess
           
-          # 1. Maps your HTML landing file to root index.html
+          # 1. Copy dashboard to both root and microchess subdirectory
           cp microchess/microchess.html pages/index.html
+          cp microchess/microchess.html pages/microchess/index.html
           
-          # 2. Re-creates dist/ structure containing the compiled bundle.js
-          mkdir -p pages/dist
+          # 2. Re-create dist/ structure for both locations
+          mkdir -p pages/dist pages/microchess/dist
           cp -r microchess/dist/* pages/dist/
+          cp -r microchess/dist/* pages/microchess/dist/
           
-          # 3. Re-creates js/ folder structure for asset paths
-          mkdir -p pages/js
-          cp -r microchess/js/* pages/js/ || echo "No source folder found"
-
-          # 4. Fallback database json positioning
+          # 3. Fallback database json positioning for both locations
           cp microchess/randomchess.json pages/randomchess.json
+          cp microchess/randomchess.json pages/microchess/randomchess.json
           
           echo "=== Staged pages/ layout verification ==="
           ls -la pages
-          echo "=== Staged pages/dist/ payload verification ==="
-          ls -la pages/dist/
+          ls -la pages/microchess
 
       - name: Push compiled assets to 'cdn' branch
         uses: peaceiris/actions-gh-pages@v3
